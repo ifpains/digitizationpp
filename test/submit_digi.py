@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os, sys
+import numpy as np
 
 jobstring  = '''#!/bin/bash
 ulimit -c 0 -S
@@ -70,8 +71,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("srcdir", help="base directory where build-dir is")
-    parser.add_argument("-a", "--alphas", type=float, nargs="*",  default=[0.01, 0.02, 0.03], help="List of alpha values to scan (default: %(default)s)")
-    parser.add_argument("-g", "--gains", type=float, nargs="*",  default=[0.02, 0.03, 0.04], help="List of gain normalization values to scan (default: %(default)s)")
+    parser.add_argument("-a", "--alphas", type=float, nargs="*",  default=np.linspace(0.019,0.023,11), help="List of alpha values to scan (default: %(default)s)")
+    parser.add_argument("-l", "--lambdas", type=float, nargs="*",  default=np.linspace(850,1850,11), help="List of absorption length values (in mm) to scan (default: %(default)s)")
     parser.add_argument("-c", "--ce", type=int, default=2, help="Computing element in condor to use")
     parser.add_argument("-t", "--threads", type=int, default=8, help="Number of CPUs to request")
     parser.add_argument("-o", "--outdir", type=str, default=None, help='output directory');
@@ -90,20 +91,16 @@ if __name__ == "__main__":
     
     jobdir = absopath+'/jobs/'
     if not os.path.isdir(jobdir):
-        os.system('mkdir -p {od}'.format(od=jobdir))
-        os.system(f'chmod 777 {jobdir}')
+        os.system('mkdir -m 777 -p {od}'.format(od=jobdir))
     logdir = absopath+'/logs/'
     if not os.path.isdir(logdir):
-        os.system('mkdir -p {od}'.format(od=logdir))
-        os.system(f'chmod 777 {logdir}')
+        os.system('mkdir -m 777 -p {od}'.format(od=logdir))
     errdir = absopath+'/errs/'
     if not os.path.isdir(errdir):
-        os.system('mkdir -p {od}'.format(od=errdir))
-        os.system(f'chmod 777 {errdir}')
+        os.system('mkdir -m 777 -p {od}'.format(od=errdir))
     outdirCondor = absopath+'/outs/'
     if not os.path.isdir(outdirCondor):
-        os.system('mkdir -p {od}'.format(od=outdirCondor))
-        os.system(f'chmod 777 {outdirCondor}')
+        os.system('mkdir -m 777 -p {od}'.format(od=outdirCondor))
     if not args.storagedir:
         outdirStorage = outdirCondor
     else:
@@ -111,30 +108,29 @@ if __name__ == "__main__":
 
     srcfiles,cfgfiles,outfiles = [],[],[]
     for a,alpha in enumerate(args.alphas):
-        for g,gain in enumerate(args.gains):
-            print (f"Prepare job for pair (alpha,normgain) = ({alpha},{gain})")
-            con_file_name = jobdir+f"/conf_{a}-{g}.txt"
+        for l,Lambda in enumerate(args.lambdas):
+            print (f"Prepare job for pair (alpha,Lambda) = ({alpha},{Lambda})")
+            con_file_name = jobdir+f"/conf_{a}-{l}.txt"
             os.system(f"cp {args.srcdir}/config/ConfigFile_new.txt {con_file_name}") 
-            job_file_name = jobdir+f"/job_{a}-{g}.sh"
-            log_file_name = logdir+f"/job_{a}-{g}.sh"
+            job_file_name = jobdir+f"/job_{a}-{l}.sh"
+            log_file_name = logdir+f"/job_{a}-{l}.sh"
             tmp_file = open(job_file_name, 'w')
 
-            replaceParam(con_file_name,"'c_G'                   : 0.03",  f"'c_G'                   : {gain:.3f}")
-            replaceParam(con_file_name,"'alpha_G'               : 0.0209",f"'alpha_G'               : {alpha:.3f}")
-            replaceParam(con_file_name,"'events'                : -1",f"'events'                : 10")
+            replaceParam(con_file_name,"'absorption_l'          : 1350.",  f"'absorption_l'          : {Lambda:.0f}")
+            replaceParam(con_file_name,"'alpha_G'               : 0.0209", f"'alpha_G'               : {alpha:.3f}")
+            #replaceParam(con_file_name,"'events'                : -1",f"'events'                : 10")
             
+            targetDir = outdirCondor if not args.storagedir else outdirStorage
             tmp_filecont = jobstring
             # N.B.: use explicitly "./" as the directory for the config file name, because the path for the vignetting is built from there in DigitizationRunner.cxx
-            cmd = f"./build-dir/digitizationpp ./{os.path.basename(con_file_name)} -I {os.path.basename(os.path.normpath(args.inputdir))} -O digi_{a}-{g}"
+            cmd = f"./build-dir/digitizationpp ./{os.path.basename(con_file_name)} -I {os.path.basename(os.path.normpath(args.inputdir))} -O digi_{a}-{l}"
             tmp_filecont = tmp_filecont.replace('COMMAND',cmd)
             tmp_file.write(tmp_filecont)
             tmp_file.close()
             srcfiles.append(job_file_name)
             cfgfiles.append(con_file_name)
-            targetDir = outdirCondor if not args.storagedir else outdirStorage
-            os.system(f'mkdir -p {targetDir}/digi_{a}-{g}')
-            os.system(f'chmod 777 {targetDir}/digi_{a}-{g}')
-            outfiles.append(f'digi_{a}-{g}')
+            os.system(f'mkdir -m 777 -p {targetDir}/digi_{a}-{l}')
+            outfiles.append(f'digi_{a}-{l}')
     cf = makeCondorFile(jobdir,srcfiles,cfgfiles,outfiles,args,logdir,errdir,outdirCondor)
     subcmd = f'source $CVMFS_PARENT_DIR/cvmfs/sft-cygno.infn.it/config/cygno_htc -s {cf} {args.ce}'
 
