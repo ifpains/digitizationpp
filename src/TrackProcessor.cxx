@@ -41,7 +41,8 @@ bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                            const TH2F& VignMap,
                                            float energy,
                                            bool NR_flag,
-                                           vector<vector<double>>& image)
+                                           vector<vector<double>>& image,
+                                           vector<PMTVoxel>& pmt_voxels)
 {
     // vectorized smearing
     vector<float> S3D_x;
@@ -194,7 +195,20 @@ bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                     int yy = ((key - zz) / N) % M;
                     int xx = (key - yy * N - zz) / N / M;
                     // optbeta is multiplied by factors to normalize on volume chosen
-                    hout[xx][yy]+=Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    double n_ph_val = Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    hout[xx][yy]+=n_ph_val;
+
+                    // --- PMT Simulation Integration ---
+                    if (n_ph_val > 0) {
+                        PMTVoxel voxel;
+                        // Convert bin indices back to physical coordinates (mm)
+                        voxel.x = (xx * xbin_dim) + xmin;
+                        voxel.y = (yy * ybin_dim) + ymin;
+                        voxel.z = (zz * zbin_dim) + zmin; 
+                        
+                        voxel.n_photons = n_ph_val;
+                        pmt_voxels.push_back(voxel);
+                    }
                 }
                 auto endampli = std::chrono::steady_clock::now();
                 dur_ampli=dur_ampli+endampli-startampli;
@@ -270,7 +284,20 @@ bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                     int yy = ((key - zz) / N) % M;
                     int xx = (key - yy * N - zz) / N / M;
                     // optbeta is multiplied by factors to normalize on volume chosen
-                    hout[xx][yy]+=Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    double n_ph_val = Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    hout[xx][yy]+=n_ph_val;
+                    
+                    // --- PMT Simulation Integration ---
+                    if (n_ph_val > 0) {
+                        PMTVoxel voxel;
+                        // Convert bin indices back to physical coordinates (mm)
+                        voxel.x = (xx * xbin_dim) + xmin;
+                        voxel.y = (yy * ybin_dim) + ymin;
+                        voxel.z = (zz * zbin_dim) + zmin; 
+                        
+                        voxel.n_photons = n_ph_val;
+                        pmt_voxels.push_back(voxel);
+                    }
                 }
                 auto endampli = std::chrono::steady_clock::now();
                 dur_ampli=dur_ampli+endampli-startampli;
@@ -372,7 +399,21 @@ bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                 if(hc[xx][yy][zz] != 0.) {
                                     not_empty++;
                                     // optbeta is multiplied by factors to normalize on volume chosen
-                                    hout[xx][yy]+=Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                                    double n_ph_val = Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+
+                                    hout[xx][yy] += n_ph_val;
+                                    
+                                    // --- PMT Simulation Integration ---
+                                    if (n_ph_val > 0) {
+                                        PMTVoxel voxel;
+                                        // Convert bin indices back to physical coordinates (mm)
+                                        voxel.x = (xx * xbin_dim) + xmin;
+                                        voxel.y = (yy * ybin_dim) + ymin;
+                                        voxel.z = (zz * zbin_dim) + split_vals[i];
+                                        
+                                        voxel.n_photons = n_ph_val;
+                                        pmt_voxels.push_back(voxel);
+                                    }   
                                 }
                             }
                         }
@@ -434,7 +475,21 @@ bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                 if(hc[xx][yy][zz] != 0.) {
                                     not_empty++;
                                     // optbeta is multiplied by factors to normalize on volume chosen
-                                    hout[xx][yy]+=Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                                    double n_ph_val = Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+
+                                    hout[xx][yy] += n_ph_val;
+
+                                    // --- PMT Simulation Integration ---
+                                    if (n_ph_val > 0) {
+                                        PMTVoxel voxel;
+                                        // Convert bin indices back to physical coordinates (mm)
+                                        voxel.x = (xx * xbin_dim) + xmin;
+                                        voxel.y = (yy * ybin_dim) + ymin;
+                                        voxel.z = (zz * zbin_dim) + split_vals[i];
+                                        
+                                        voxel.n_photons = n_ph_val;
+                                        pmt_voxels.push_back(voxel);
+                                    } 
                                 }
                             }
                         }

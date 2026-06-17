@@ -11,11 +11,12 @@
 'ion_pot'               : 0.0350,    # ionization potential for He/CF4 60/40 [keV]
 'photons_per_el'        : 0.07,      # number of photons per electron produced in the avalanche
 'absorption_l'          : 1350.,     # absorption length in [mm]
+'drift_field'           : 0.8,         # drift field [kV/cm]
 
 # Detector parameters
-'GEM1_HV'               : 420.,      # HV of GEM1
-'GEM2_HV'               : 420.,      # HV of GEM2
-'GEM3_HV'               : 420.,      # HV of GEM3
+'GEM1_HV'               : 440.,      # HV of GEM1
+'GEM2_HV'               : 440.,      # HV of GEM2
+'GEM3_HV'               : 440.,      # HV of GEM3
 'GEM_gain_factor'       : 0.03,
 'x_dim'			: 346,       # first dimension of the detector
 'y_dim'			: 346,       # second dimension of the detector
@@ -64,7 +65,7 @@
 'Vig_Map'		: 'vignette_runs03930to03932.root',
 
 # Operative parameters
-'start_run_number'      : 1,	    # first number for outputfile: histograms_Run<start_run_number%5d>.root
+'start_run_number'      : 0,	    # first number for outputfile: histograms_Run<start_run_number%5d>.root
 'NR'                    : True,     # 'True' for NR and ER digitization, 'False' for only ER
 'SRIM'                  : False,      # 'True' for SRIM NR simulations
 'NR_list'               : , #'NRlist_AmBeISO_LIME_neutrons_50cmPE_10cmCu_NOPb_10umStep', # Name of the SRIM MC NR_list file   
@@ -77,5 +78,50 @@
 'Parallel_threads'      : 8,         # Integer parameter: number of threads to use in parallel calculation
 'queue'                 : 0,	     # If you are sending to the CNAF queue write 1. The outputfiles will be forced to be written in local folder to be sent to cloud
 'redpix_output'         : False,      # True if you want the output format being only the redpixes instead of images and redpixes. NOTE: this will change the output namefile to "digi_RunXXXXX.root"
+
+## PMT side
+# PMT simulation parameters
+'pmt_mode'              : True,       # 'True' for PMT simulation
+'pmt_number'            : 4,          # Number of PMTs
+'dist_gem_pmt'          : 190,        # Z distance from GEM plane (GEM is at z = 0)
+'pmt_radius'            : 11,         # Radius of PMT R7378A
+
+## PMT positions
+'pmt_1_x'               : -142.0,     # X position of PMT 1 (Top-Left)
+'pmt_1_y'               : -142.0,     # Y position of PMT 1
+'pmt_2_x'               : 142.0,      # X position of PMT 2 (Top-Right)
+'pmt_2_y'               : -142.0,     # Y position of PMT 2
+'pmt_3_x'               : 142.0,      # X position of PMT 3 (Bottom-Right)
+'pmt_3_y'               : 142.0,      # Y position of PMT 3
+'pmt_4_x'               : -142.0,     # X position of PMT 4 (Bottom-Left)
+'pmt_4_y'               : 142.0,      # Y position of PMT 4
+
+## PMT time response
+'transit_time'          : 17,         # Average transit time of photoelectrons (ns)
+'transit_time_spread'   : 0.9,        # Spread (standard deviation) of transit time (ns)
+'exp_dispersion_scale'  : 0.079e9,    # Scale parameter (lambda) for exponential dispersion (Hz)
+
+## PMT signal parameters
+'pmt_gain'              : 0.398e6,    # Gain of the PMT (amplification factor)
+'pmt_sigma'             : 0.516e-9,   # Standard deviation of Gaussian component (seconds)
+'pmt_lambda'            : 0.658e9,    # Rate (lambda) of exponential tail in signal (Hz)
+
+## Digitizers setup
+'fast_window_len'       : 1024,       # Number of samples in fast digitizer window
+'slow_window_len'       : 4000,       # Number of samples in slow digitizer window
+'fast_freq'             : 750e6,      # Sampling frequency of fast digitizer (Hz)
+'slow_freq'             : 250e6,      # Sampling frequency of slow digitizer (Hz)
+'digitizers'            : 'Both',     # Indicates which digitizers to simulate: 'Fast', 'Slow' or 'Both'
+
+## Noise PSDs paths
+'fast_noise_path_pmt_1' : ../pmt/noise_psd/fast_noise_ch1.txt,  # Fast noise PSD for PMT 1
+'fast_noise_path_pmt_2' : ../pmt/noise_psd/fast_noise_ch2.txt,  # Fast noise PSD for PMT 2
+'fast_noise_path_pmt_3' : ../pmt/noise_psd/fast_noise_ch3.txt,  # Fast noise PSD for PMT 3
+'fast_noise_path_pmt_4' : ../pmt/noise_psd/fast_noise_ch4.txt,  # Fast noise PSD for PMT 4
+
+'slow_noise_path_pmt_1' : ../pmt/noise_psd/slow_noise_ch1.txt,  # Slow noise PSD for PMT 1
+'slow_noise_path_pmt_2' : ../pmt/noise_psd/slow_noise_ch2.txt,  # Slow noise PSD for PMT 2
+'slow_noise_path_pmt_3' : ../pmt/noise_psd/slow_noise_ch3.txt,  # Slow noise PSD for PMT 3
+'slow_noise_path_pmt_4' : ../pmt/noise_psd/slow_noise_ch4.txt,  # Slow noise PSD for PMT 4
 
 }

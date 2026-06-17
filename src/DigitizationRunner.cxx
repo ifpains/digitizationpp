@@ -13,6 +13,7 @@
 #include "Utils.h"
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <cstdlib>
 #include <limits.h>
@@ -23,6 +24,8 @@
 #include "TTree.h"
 #include "TH1.h"
 #include "TH2.h"
+#include "PMTHits.h"
+#include "PMTSignal.h"
 
 using namespace std;
 
@@ -234,7 +237,8 @@ void DigitizationRunner::SaveValues(shared_ptr<TFile>& outfile) {
            key!="noiserun"  && key !="bckg_name" &&
            key!="NR_list"   && key !="Camera_type" &&
            key!="MC_xaxis"  && key !="MC_yaxis" &&
-           key!="MC_zaxis"
+           key!="MC_zaxis"  && key!="digitizers" &&
+           key.find("noise_path") == string::npos
            )
         {
             TH1F h(string(key).c_str(),"",1,0,1);
@@ -465,6 +469,40 @@ void DigitizationRunner::FillRedpix(const std::vector<std::vector<double>>& imag
     return;
 }
 
+// Computes electron drift velocity (cm/us) for He/CF4 60/40 based on electric field data.
+// Source: Data points extracted from 'HeCF4_60_40.csv'.
+double DigitizationRunner::compute_drift_velocity(double electric_field) {
+    // Data pairs: (Electric Field [kV/cm], Drift Velocity [cm/us])
+    std::vector<std::pair<double, double>> data = {
+        {0.0, 0.00},  {0.5, 4.06},  {1.0, 6.12},  {1.5, 7.42},
+        {2.0, 8.30},  {2.5, 8.84},  {3.0, 9.08},  {3.5, 9.06},
+        {4.0, 8.84},  {4.5, 8.49},  {5.0, 8.11},  {5.5, 7.75},
+        {6.0, 7.46},  {6.5, 7.25},  {7.0, 7.11},  {7.5, 7.03},
+        {8.0, 7.00},  {8.5, 7.00},  {9.0, 7.04},  {9.5, 7.10},
+        {10.0, 7.18}, {10.5, 7.28}, {11.0, 7.39}, {11.5, 7.51}
+    };
+
+    // Lower bound check: return minimum velocity if field is below range
+    if (electric_field <= data.front().first) return data.front().second;
+    
+    // Upper bound check: return saturation velocity if field exceeds range
+    if (electric_field >= data.back().first) return data.back().second;
+
+    // Linear search and interpolation
+    for (size_t i = 0; i < data.size() - 1; ++i) {
+        if (electric_field >= data[i].first && electric_field <= data[i+1].first) {
+            double x0 = data[i].first;
+            double y0 = data[i].second;
+            double x1 = data[i+1].first;
+            double y1 = data[i+1].second;
+            
+            // Linear Interpolation: y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+            return y0 + (electric_field - x0) * (y1 - y0) / (x1 - x0);
+        }
+    }
+    return 0.0; // Safety fallback
+}
+
 // ================================================================================================
 // ================================================================================================
 // ================================================================================================
@@ -667,6 +705,18 @@ void DigitizationRunner::processRootFiles() {
             std::unique_ptr<std::vector<uint16_t>> redpix_iy = std::make_unique<std::vector<uint16_t>>();
             std::unique_ptr<std::vector<uint16_t>> redpix_iz = std::make_unique<std::vector<uint16_t>>();
             
+             // PMT Waveforms (Fast and Slow) ---
+            std::unique_ptr<std::vector<double>> wav_fast_pmt1 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_fast_pmt2 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_fast_pmt3 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_fast_pmt4 = std::make_unique<std::vector<double>>();
+
+            std::unique_ptr<std::vector<double>> wav_slow_pmt1 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_slow_pmt2 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_slow_pmt3 = std::make_unique<std::vector<double>>();
+            std::unique_ptr<std::vector<double>> wav_slow_pmt4 = std::make_unique<std::vector<double>>();
+            
+
             // ROOT TTree
             auto outtree = std::make_unique<TTree>("event_info", "event_info");
                 
@@ -712,6 +762,18 @@ void DigitizationRunner::processRootFiles() {
             outtree->Branch("redpix_ix", redpix_ix.get());
             outtree->Branch("redpix_iy", redpix_iy.get());
             outtree->Branch("redpix_iz", redpix_iz.get());
+            if (config.getBool("pmt_mode")) {
+                // Create branches for PMT waveforms
+                outtree->Branch("wav_fast_pmt1", wav_fast_pmt1.get());
+                outtree->Branch("wav_fast_pmt2", wav_fast_pmt2.get());
+                outtree->Branch("wav_fast_pmt3", wav_fast_pmt3.get());
+                outtree->Branch("wav_fast_pmt4", wav_fast_pmt4.get());
+
+                outtree->Branch("wav_slow_pmt1", wav_slow_pmt1.get());
+                outtree->Branch("wav_slow_pmt2", wav_slow_pmt2.get());
+                outtree->Branch("wav_slow_pmt3", wav_slow_pmt3.get());
+                outtree->Branch("wav_slow_pmt4", wav_slow_pmt4.get());
+            }
 
             int start = firstentry + digipart * NMAX_EVENTS;
             int stop  = start + NMAX_EVENTS-1;
@@ -723,7 +785,11 @@ void DigitizationRunner::processRootFiles() {
                 redpix_iy->clear();
                 redpix_iz->clear();
                 
-                
+                if (config.getBool("pmt_mode")) {
+                    wav_fast_pmt1->clear(); wav_fast_pmt2->clear(); wav_fast_pmt3->clear(); wav_fast_pmt4->clear();
+                    wav_slow_pmt1->clear(); wav_slow_pmt2->clear(); wav_slow_pmt3->clear(); wav_slow_pmt4->clear();
+                }
+
                 inputtree->GetEntry(entry);
                 
                 //DEBUG
@@ -992,6 +1058,8 @@ void DigitizationRunner::processRootFiles() {
                 
                 auto ta = std::chrono::steady_clock::now();
                 // with saturation
+                std::vector<PMTVoxel> pmt_voxels; 
+
                 if(config.getBool("saturation")) {
                     cout<<"Starting compute_cmos_with_saturation with size = "<<x_hits_tr.size()<<"..."<<endl;
                     if(!processTrack.computeWithSaturation(x_hits_tr,
@@ -1001,7 +1069,8 @@ void DigitizationRunner::processRootFiles() {
                                                            VignMap,
                                                            energy,
                                                            NR_flag,
-                                                           array2d_Nph
+                                                           array2d_Nph,
+                                                           pmt_voxels
                                                            )) {
                         std::cerr<<"Warning: DigitizationRunner::processRootFiles: skipping this track because of error from TrackProcessor::computeWithSaturation."<<std::endl;
 
@@ -1069,7 +1138,86 @@ void DigitizationRunner::processRootFiles() {
                 std::chrono::duration<double> durtmp=tb-ta;
                 cout << "Time taken in seconds to compute_cmos_with_saturation is: " << durtmp.count() << endl;
                 
+                // ========================================================================== //
+                //                               PMT SIMULATION                               //
+                // ========================================================================== //
+                
+                if (config.getBool("pmt_mode") && !pmt_voxels.empty()) {
+                    
+                    auto pmt_start = std::chrono::steady_clock::now();
+                    std::cout << "[DEBUG] Starting PMT simulation ..." << std::endl;
+                    
+                    const std::map<std::string, std::string> pmt_options = config.getOptions();
+                    
+                    // 1. Properties Setup
+                    const double drift_field = config.getDouble("drift_field"); 
+                    const double v_drift_mm_ns = compute_drift_velocity(drift_field) / 100.0;
+                    const double qe_factor = 0.0136; 
+                
+                    // 2. Data Preparation                
+                    double min_z = 1.0e9;
+                    bool event_detected = false;
+                    for (const auto& voxel : pmt_voxels) {
+                         if (voxel.n_photons * qe_factor >= 0.5) { 
+                            if (voxel.z < min_z) { min_z = voxel.z; event_detected = true; }
+                         }
+                    }
+                    const double time_shift_reference = event_detected ? min_z : 0.0;
+                
+                    std::vector<double> x_coords, y_coords, arrival_times;
+                    std::vector<int> effective_photons;
+                    
+                    for (const auto& voxel : pmt_voxels) {
+                        const int n_photons_eff = std::round(voxel.n_photons * qe_factor);
+                        if (n_photons_eff > 0) {
+                            x_coords.push_back(voxel.x);
+                            y_coords.push_back(voxel.y);
+                            effective_photons.push_back(n_photons_eff);
+                            
+                            const double z_corrected = voxel.z - time_shift_reference;
+                            arrival_times.push_back(std::abs(z_corrected) / v_drift_mm_ns);
+                        }
+                    }
+                
+                    // 3. Light Propagation and Signal Digitization
+                    if (!x_coords.empty()) {
+                        
+                        // Photon Propagation Step
+                        auto prop_start = std::chrono::steady_clock::now();
+                        PhotonPropagation propagation(x_coords, y_coords, effective_photons, arrival_times, pmt_options);
+                        auto pmt_hits_map = propagation.pmt_hits();
+                        auto prop_end = std::chrono::steady_clock::now();
+                        std::chrono::duration<double> prop_time = prop_end - prop_start;
+                        std::cout << "[DEBUG] Photon propagation (pmt_hits) took: " << prop_time.count() << " s" << std::endl;
+                
+                        // Signal Simulation Step
+                        auto sig_start = std::chrono::steady_clock::now();
+                        SignalSimulation simulator(pmt_hits_map, pmt_options);
+                        std::map<std::string, std::vector<double>> fast_signals, slow_signals;
+                        simulator.simulated_signals(fast_signals, slow_signals);
+                        auto sig_end = std::chrono::steady_clock::now();
+                        std::chrono::duration<double> sig_time = sig_end - sig_start;
+                        std::cout << "[DEBUG] Signal simulation (pmt_sim) took: " << sig_time.count() << " s" << std::endl;
+                
+                        // 4. Output Assignment
+                        *wav_fast_pmt1 = fast_signals["pmt_1"];
+                        *wav_fast_pmt2 = fast_signals["pmt_2"];
+                        *wav_fast_pmt3 = fast_signals["pmt_3"];
+                        *wav_fast_pmt4 = fast_signals["pmt_4"];
+                        *wav_slow_pmt1 = slow_signals["pmt_1"];
+                        *wav_slow_pmt2 = slow_signals["pmt_2"];
+                        *wav_slow_pmt3 = slow_signals["pmt_3"];
+                        *wav_slow_pmt4 = slow_signals["pmt_4"];
+                    }
+                
+                    auto pmt_end = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> total_pmt_time = pmt_end - pmt_start;
+                    std::cout << "[DEBUG] TOTAL PMT Simulation execution time: " << total_pmt_time.count() << " s" << std::endl;
+                }
+                
+                // ========================================================================== //
 
+                
                 // Integral of the track - if opt.exposure_effect, it's computed anyway after the cut on the original hits
                 N_photons = accumulate(array2d_Nph.cbegin(), array2d_Nph.cend(), 0, [](auto sum, const auto& row) {
                     return accumulate(row.cbegin(), row.cend(), sum);
