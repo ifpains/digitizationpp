@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os, sys
 import numpy as np
+from pathlib import Path
 
 jobstring  = '''#!/bin/bash
 ulimit -c 0 -S
@@ -14,8 +15,16 @@ source /cvmfs/sft-cygno.infn.it/config/setup_digi.sh
 COMMAND
 '''
 
+def makePreSign(jobdir,outdir,outfile):
+    ENDPOINT_URL='https://s3.cr.cnaf.infn.it:7480/'
+    BUCKET='cygno-analysis'
+    TAG=f'users/dimarcoe/digi/fe_zcone/{outdir}/'
+    FILETOKEN="/tmp/token"
+    
+    print(f"generating presigned url for: {outfile}.root with command: presigned.py -u {ENDPOINT_URL} -b {BUCKET} -t {TAG} {outfile}.root -f {FILETOKEN} > {jobdir}/{outfile}.json")
+    os.system(f"/cvmfs/sft-cygno.infn.it/config/lib/presigned.py -u {ENDPOINT_URL} -b {BUCKET} -t {TAG} {outfile}.root -f {FILETOKEN} > {jobdir}/{outdir}/{outfile}.json")
 
-def makeCondorFile(jobdir, srcFiles, cfgFiles, outFiles, options, logdir, errdir, outdirCondor):
+def makeCondorFile(jobdir, srcFiles, cfgFiles, outFiles, nrootfiles, options, logdir, errdir, outdirCondor):
 
     dummy_exec = open(jobdir+'/dummy_exec.sh','w')
     dummy_exec.write('#!/bin/bash\n')
@@ -43,12 +52,17 @@ preserve_relative_paths = True
            ld=os.path.abspath(logdir), od=os.path.abspath(outdirCondor),ed=os.path.abspath(errdir),
                cpu=options.threads, user=os.environ['USERNAME'], here=os.environ['PWD'] ) )
     for i,sf in enumerate(srcFiles):
-        condor_file.write(f'transfer_input_files = {os.path.abspath(options.srcdir)}/build-dir,{os.path.abspath(options.srcdir)}/VignettingMap,{os.path.abspath(cfgFiles[i])},{os.path.abspath(options.inputdir)},{os.path.abspath(sf)} \n')
-        condor_file.write(f'transfer_output_files = {os.path.splitext(outFiles[i])[0]}\n')
-        if options.storagedir:
-            condor_file.write(f'transfer_output_remaps = "{os.path.splitext(outFiles[i])[0]} = {options.storagedir}/{os.path.splitext(outFiles[i])[0]}"\n')
-        else:
-            condor_file.write(f'transfer_output_remaps = "{os.path.splitext(outFiles[i])[0]} = {outdirCondor}/{os.path.splitext(outFiles[i])[0]}"\n')
+        outdir = os.path.splitext(outFiles[i])[0]
+        print (f"isrcfile = {i}, sf={sf}, outdir={outdir}")
+        # create the json files for the transfer (1/output file)
+        jsonfiles = []
+        for run in range(1,nrootfiles+1):
+            rfile=f"histograms_Run{run:05d}"
+            makePreSign(outdirCondor,outdir,rfile)
+            jsonfiles.append(f"{outdirCondor}/{outdir}/{rfile}.json")
+        jsonstring = ", ".join(jsonfiles)
+        condor_file.write(f'transfer_input_files = {os.path.abspath(options.srcdir)}/build-dir, {os.path.abspath(options.srcdir)}/VignettingMap, {os.path.abspath(cfgFiles[i])}, {os.path.abspath(options.inputdir)}, {os.path.abspath(sf)}, /cvmfs/sft-cygno.infn.it/config/lib/s3upload_put.py, {jsonstring}\n')
+        #condor_file.write(f'transfer_output_files = \n')
         condor_file.write(f'arguments = {os.path.basename(sf)} \nqueue \n\n')
         
     condor_file.close()
@@ -106,12 +120,15 @@ if __name__ == "__main__":
     else:
         outdirStorage = os.path.abspath(args.storagedir)
 
+    number_root_outfiles = sum(1 for file in Path(args.inputdir).glob("*.root") if file.is_file()) 
+    print(f"==> Each DIGI job will run on {number_root_outfiles} input ROOT files and produce the same number of output files")
+    
     srcfiles,cfgfiles,outfiles = [],[],[]
     for a,alpha in enumerate(args.alphas):
         for l,Lambda in enumerate(args.lambdas):
             print (f"Prepare job for pair (alpha,Lambda) = ({alpha},{Lambda})")
             con_file_name = jobdir+f"/conf_{a}-{l}.txt"
-            os.system(f"cp {args.srcdir}/config/ConfigFile_new.txt {con_file_name}") 
+            os.system(f"cp {args.srcdir}/config/ConfigFile_new_1ev.txt {con_file_name}") 
             job_file_name = jobdir+f"/job_{a}-{l}.sh"
             log_file_name = logdir+f"/job_{a}-{l}.sh"
             tmp_file = open(job_file_name, 'w')
@@ -121,17 +138,22 @@ if __name__ == "__main__":
             #replaceParam(con_file_name,"'events'                : -1",f"'events'                : 10")
             
             targetDir = outdirCondor if not args.storagedir else outdirStorage
+            os.system(f'mkdir -m 777 -p {targetDir}/digi_{a}-{l}')
+            outfiles.append(f'digi_{a}-{l}')
+
             tmp_filecont = jobstring
             # N.B.: use explicitly "./" as the directory for the config file name, because the path for the vignetting is built from there in DigitizationRunner.cxx
             cmd = f"./build-dir/digitizationpp ./{os.path.basename(con_file_name)} -I {os.path.basename(os.path.normpath(args.inputdir))} -O digi_{a}-{l}"
             tmp_filecont = tmp_filecont.replace('COMMAND',cmd)
+            for run in range(1,number_root_outfiles+1):
+                jsonfile=f"histograms_Run{run:05d}.json"
+                tmp_filecont += f"\n./s3upload_put.py {jsonfile}"
+            tmp_filecont += "\necho DONE.\n"
             tmp_file.write(tmp_filecont)
             tmp_file.close()
             srcfiles.append(job_file_name)
             cfgfiles.append(con_file_name)
-            os.system(f'mkdir -m 777 -p {targetDir}/digi_{a}-{l}')
-            outfiles.append(f'digi_{a}-{l}')
-    cf = makeCondorFile(jobdir,srcfiles,cfgfiles,outfiles,args,logdir,errdir,outdirCondor)
+    cf = makeCondorFile(jobdir,srcfiles,cfgfiles,outfiles,number_root_outfiles,args,logdir,errdir,outdirCondor)
     subcmd = f'source $CVMFS_PARENT_DIR/cvmfs/sft-cygno.infn.it/config/cygno_htc -s {cf} {args.ce}'
 
     print (subcmd)
