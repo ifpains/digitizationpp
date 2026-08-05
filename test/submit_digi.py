@@ -97,16 +97,17 @@ def replaceParam(input_file,old_string,new_string,output_file=None):
 if __name__ == "__main__":
 
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("srcdir", help="base directory where build-dir is")
-    parser.add_argument("-a", "--alphas", type=float, nargs="*",  default=np.linspace(0.019,0.023,11), help="List of alpha values to scan (default: %(default)s)")
-    parser.add_argument("-l", "--lambdas", type=float, nargs="*",  default=np.linspace(850,1850,11), help="List of absorption length values (in mm) to scan (default: %(default)s)")
-    parser.add_argument("-c", "--ce", type=int, default=2, help="Computing element in condor to use")
+    parser.add_argument("-a", "--alphas", type=float, nargs="*",  default=np.linspace(0.019,0.023,11), help="List of alpha values to scan")
+    parser.add_argument("-l", "--lambdas", type=float, nargs="*",  default=np.linspace(850,1850,11), help="List of absorption length values (in mm) to scan")
+    parser.add_argument("-C", "--CE", type=int, default=2, help="Computing element in condor to use")
     parser.add_argument("-t", "--threads", type=int, default=8, help="Number of CPUs to request")
     parser.add_argument("-o", "--outdir", type=str, default=None, help='output directory');
     parser.add_argument("-i", "--inputdir", type=str, default=None, help='input directory');
-    parser.add_argument("-b", "--bucket", type=str, default="cygno-analysis", help='bucket in the cloud where to store the output (default: %(default)s)');
-    parser.add_argument("-s", "--storagedir", type=str, default="users/dimarcoe/digi/fe_zcone", help='output directory in the cloud (default: %(default)s)');
+    parser.add_argument("-b", "--bucket", type=str, default="cygno-analysis", help='bucket in the cloud where to store the output');
+    parser.add_argument("-s", "--storagedir", type=str, default="users/dimarcoe/digi/fe_zcone", help='output directory in the cloud');
+    parser.add_argument("-c", "--config", type=str, default="config/ConfigFile_new.txt", help='config file for DIGI to be used');
     args = parser.parse_args()
 
     print("SUBMIT DIGI")
@@ -169,7 +170,7 @@ if __name__ == "__main__":
             srcfiles.append(job_file_name)
             cfgfiles.append(con_file_name)
     cf = makeCondorFile(jobdir,srcfiles,cfgfiles,outfiles,number_root_outfiles,args,logdir,errdir,outdirCondor)
-    subcmd = f'source $CVMFS_PARENT_DIR/cvmfs/sft-cygno.infn.it/config/cygno_htc -s {cf} {args.ce}'
+    subcmd = f'source $CVMFS_PARENT_DIR/cvmfs/sft-cygno.infn.it/config/cygno_htc -s {cf} {args.CE}'
 
     print (subcmd)
 
