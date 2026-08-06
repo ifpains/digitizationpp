@@ -469,43 +469,7 @@ void DigitizationRunner::FillRedpix(const std::vector<std::vector<double>>& imag
     return;
 }
 
-// Computes electron drift velocity (cm/us) for He/CF4 60/40 based on electric field data.
-// Source: Data points extracted from 'HeCF4_60_40.csv'.
-double DigitizationRunner::compute_drift_velocity(double electric_field) {
-    // Data pairs: (Electric Field [kV/cm], Drift Velocity [cm/us])
-    std::vector<std::pair<double, double>> data = {
-        {0.0, 0.00},  {0.5, 4.06},  {1.0, 6.12},  {1.5, 7.42},
-        {2.0, 8.30},  {2.5, 8.84},  {3.0, 9.08},  {3.5, 9.06},
-        {4.0, 8.84},  {4.5, 8.49},  {5.0, 8.11},  {5.5, 7.75},
-        {6.0, 7.46},  {6.5, 7.25},  {7.0, 7.11},  {7.5, 7.03},
-        {8.0, 7.00},  {8.5, 7.00},  {9.0, 7.04},  {9.5, 7.10},
-        {10.0, 7.18}, {10.5, 7.28}, {11.0, 7.39}, {11.5, 7.51}
-    };
 
-    // Lower bound check: return minimum velocity if field is below range
-    if (electric_field <= data.front().first) return data.front().second;
-    
-    // Upper bound check: return saturation velocity if field exceeds range
-    if (electric_field >= data.back().first) return data.back().second;
-
-    // Linear search and interpolation
-    for (size_t i = 0; i < data.size() - 1; ++i) {
-        if (electric_field >= data[i].first && electric_field <= data[i+1].first) {
-            double x0 = data[i].first;
-            double y0 = data[i].second;
-            double x1 = data[i+1].first;
-            double y1 = data[i+1].second;
-            
-            // Linear Interpolation: y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
-            return y0 + (electric_field - x0) * (y1 - y0) / (x1 - x0);
-        }
-    }
-    return 0.0; // Safety fallback
-}
-
-// ================================================================================================
-// ================================================================================================
-// ================================================================================================
 // ================================================================================================
 
 void DigitizationRunner::processRootFiles() {
@@ -1151,7 +1115,7 @@ void DigitizationRunner::processRootFiles() {
                     
                     // 1. Properties Setup
                     const double drift_field = config.getDouble("drift_field"); 
-                    const double v_drift_mm_ns = compute_drift_velocity(drift_field) / 100.0;
+                    const double v_drift_mm_ns = Utils::compute_drift_velocity(drift_field) / 100.0;
                     const double qe_factor = 0.0136; 
                 
                     // 2. Data Preparation                
@@ -1217,7 +1181,7 @@ void DigitizationRunner::processRootFiles() {
                 
                 // ========================================================================== //
 
-                
+
                 // Integral of the track - if opt.exposure_effect, it's computed anyway after the cut on the original hits
                 N_photons = accumulate(array2d_Nph.cbegin(), array2d_Nph.cend(), 0, [](auto sum, const auto& row) {
                     return accumulate(row.cbegin(), row.cend(), sum);

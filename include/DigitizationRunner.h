@@ -226,15 +226,6 @@ private:
      */
      void generateHistogramsFromDigi();
 
-     /**
-     * @brief Computes the electron drift velocity in He/CF4 60/40 gas mixture.
-     *
-     * @param electric_field The magnitude of the electric field in [kV/cm].
-     * @return The electron drift velocity in [cm/us].
-     *
-     * @note The data points are extracted from the `HeCF4_60_40.csv` dataset.
-     */
-     double compute_drift_velocity(double electric_field);
  
      ConfigManager config;           ///< Configuration manager
      std::string configFile;         ///< Path to the config file
