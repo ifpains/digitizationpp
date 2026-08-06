@@ -26,26 +26,24 @@ def makeInputList(inputdir):
     for file in Path(inputdir).glob("*.root"):
         if file.is_file():
             wget_cmds.append(f"wget {full_url}/{file.name}")
-    copy_cmd = '\n'.join(wget_cmds)
-    print(f"Will copy the input files: {copy_cmd} over cloud in the jobs itself.")
-    return copy_cmd
+    return wget_cmds
 
-def makePreSign(jobdir,outdir,outfile,options):
+def makePreSign(jobdir,jobnumber,outfile,options):
     BUCKET=options.bucket
-    TAG=f'{options.storagedir}/{outdir}/'
-    FILETOKEN="/tmp/token"
-    
-    print(f"generating presigned url for: {outfile}.root with command: presigned.py -u {ENDPOINT_URL} -b {BUCKET} -t {TAG} {outfile}.root -f {FILETOKEN} > {jobdir}/{outdir}/{outfile}.json")
-    os.system(f"/cvmfs/sft-cygno.infn.it/config/lib/presigned.py -u {ENDPOINT_URL} -b {BUCKET} -t {TAG} {outfile}.root -f {FILETOKEN} > {jobdir}/{outdir}/{outfile}.json")
+    TAG=f'{options.storagedir}/{Path(jobdir).name}/job_{jobnumber}'
+    FILETOKEN='/tmp/token'
 
-def makeCondorFile(jobdir, srcFiles, cfgFiles, outFiles, nrootfiles, options, logdir, errdir, outdirCondor):
+    cmd = f'/cvmfs/sft-cygno.infn.it/config/lib/presigned.py -u {ENDPOINT_URL} -b {BUCKET} -t {TAG} {outfile} -f {FILETOKEN} > {jobdir}/presign_job{jobnumber}.json'
+    print(f"generating presigned url for: with command: {cmd}")
+    os.system(cmd)
+
+def makeCondorFile(condor_file_name, jobdir, srcFiles, cfgFile, options):
 
     dummy_exec = open(jobdir+'/dummy_exec.sh','w')
     dummy_exec.write('#!/bin/bash\n')
     dummy_exec.write('bash $*\n')
     dummy_exec.close()
      
-    condor_file_name = jobdir+'/condor_submit.condor'
     condor_file = open(condor_file_name,'w')
     condor_file.write('''+SingularityImage = "/cvmfs/sft-cygno.infn.it/dockers/images/cygno-wn_v2.4.sif"
 +SingularityBind = "/cvmfs/:/cvmfs/"
@@ -63,24 +61,14 @@ should_transfer_files   = YES
 preserve_relative_paths = True
 +CygnoUser = "{user}"\n
 '''.format(de=dummy_exec.name,
-           ld=os.path.abspath(logdir), od=os.path.abspath(outdirCondor),ed=os.path.abspath(errdir),
+           ld=os.path.abspath(jobdir), od=os.path.abspath(jobdir),ed=os.path.abspath(jobdir),
            cpu=options.threads, user=os.environ['USERNAME'], here=os.environ['PWD'] ) )
-    for i,sf in enumerate(srcFiles):
-        outdir = os.path.splitext(outFiles[i])[0]
-        print (f"isrcfile = {i}, sf={sf}, outdir={outdir}")
-        # create the json files for the transfer (1/output file)
-        jsonfiles = []
-        for run in range(1,nrootfiles+1):
-            rfile=f"histograms_Run{run:05d}"
-            makePreSign(outdirCondor,outdir,rfile,options)
-            jsonfiles.append(f"{outdirCondor}/{outdir}/{rfile}.json")
-        jsonstring = ", ".join(jsonfiles)
-        condor_file.write(f'transfer_input_files = {os.path.abspath(options.srcdir)}/build-dir, {os.path.abspath(options.srcdir)}/VignettingMap, {os.path.abspath(cfgFiles[i])}, {os.path.abspath(sf)}, /cvmfs/sft-cygno.infn.it/config/lib/s3upload_put.py, {jsonstring}\n')
-        #condor_file.write(f'transfer_output_files = \n')
-        condor_file.write(f'arguments = {os.path.basename(sf)} \nqueue \n\n')
+    for isrc,src in enumerate(srcFiles):
+        print (f"isrcfile = {isrc}, sf={src}")
+        condor_file.write(f'transfer_input_files = {os.path.abspath(options.srcdir)}/build-dir, {os.path.abspath(options.srcdir)}/VignettingMap, {os.path.abspath(cfgFile)}, {os.path.abspath(src)}, /cvmfs/sft-cygno.infn.it/config/lib/s3upload_put.py, {jobdir}/presign_job{isrc}.json\n')
+        condor_file.write(f'arguments = {os.path.basename(src)} \nqueue \n\n')
         
     condor_file.close()
-    return condor_file_name
 
 def replaceParam(input_file,old_string,new_string,output_file=None):
     with open(input_file, "r", encoding="utf-8") as f:
@@ -123,56 +111,60 @@ if __name__ == "__main__":
         raise RuntimeError ('ERROR: inputdir should start with "/cnaf/cygno-" because the job copies the inputfiles from cloud with wget fro the 3 allowed cygno-<bucket>s')
     else:
         number_root_outfiles = sum(1 for file in Path(args.inputdir).glob("*.root") if file.is_file()) 
-        print(f"==> Each DIGI job will run on {number_root_outfiles} input ROOT files and produce the same number of output files")
+        print(f"==> Each condor cluster will run on {number_root_outfiles} ROOT files, 1 job / input file, and produce the same number of output files")
         
     jobdir = absopath+'/jobs/'
     if not os.path.isdir(jobdir):
         os.system('mkdir -m 777 -p {od}'.format(od=jobdir))
-    logdir = absopath+'/logs/'
-    if not os.path.isdir(logdir):
-        os.system('mkdir -m 777 -p {od}'.format(od=logdir))
-    errdir = absopath+'/errs/'
-    if not os.path.isdir(errdir):
-        os.system('mkdir -m 777 -p {od}'.format(od=errdir))
-    outdirCondor = absopath+'/outs/'
-    if not os.path.isdir(outdirCondor):
-        os.system('mkdir -m 777 -p {od}'.format(od=outdirCondor))
 
-    srcfiles,cfgfiles,outfiles = [],[],[]
+    condorfiles = []
     for a,alpha in enumerate(args.alphas):
         for l,Lambda in enumerate(args.lambdas):
             print (f"Prepare job for pair (alpha,Lambda) = ({alpha},{Lambda})")
-            con_file_name = jobdir+f"/conf_{a}-{l}.txt"
-            os.system(f"cp {args.srcdir}/config/ConfigFile_new.txt {con_file_name}") 
-            job_file_name = jobdir+f"/job_{a}-{l}.sh"
-            log_file_name = logdir+f"/job_{a}-{l}.sh"
-            tmp_file = open(job_file_name, 'w')
+            con_file_name = f"{jobdir}/conf_{a}-{l}.txt"
+            os.system(f"cp {args.srcdir}/{args.config} {con_file_name}") 
 
             replaceParam(con_file_name,"'absorption_l'          : 1350.",  f"'absorption_l'          : {Lambda:.0f}")
             replaceParam(con_file_name,"'alpha_G'               : 0.0209", f"'alpha_G'               : {alpha:.3f}")
             #replaceParam(con_file_name,"'events'                : -1",f"'events'                : 10")
             
-            os.system(f'mkdir -m 777 -p {outdirCondor}/digi_{a}-{l}')
-            outfiles.append(f'digi_{a}-{l}')
+            ijobdir = f'{jobdir}/digi_{a}-{l}'
+            os.system(f'mkdir -m 777 -p {ijobdir}')
 
-            tmp_filecont = jobstring
             # N.B.: use explicitly "./" as the directory for the config file name, because the path for the vignetting is built from there in DigitizationRunner.cxx
-            cmd = f"\n./build-dir/digitizationpp ./{os.path.basename(con_file_name)} -I ./ -O digi_{a}-{l}"
+            cmd = f"\n./build-dir/digitizationpp ./{os.path.basename(con_file_name)} -I ./ -O ./"
 
-            tmp_filecont += makeInputList(args.inputdir)
-            tmp_filecont += cmd
-            for run in range(1,number_root_outfiles+1):
-                jsonfile=f"histograms_Run{run:05d}.json"
-                tmp_filecont += f"\n./s3upload_put.py {jsonfile}"
-            tmp_filecont += "\necho DONE.\n"
-            tmp_file.write(tmp_filecont)
-            tmp_file.close()
-            srcfiles.append(job_file_name)
-            cfgfiles.append(con_file_name)
-    cf = makeCondorFile(jobdir,srcfiles,cfgfiles,outfiles,number_root_outfiles,args,logdir,errdir,outdirCondor)
-    subcmd = f'source $CVMFS_PARENT_DIR/cvmfs/sft-cygno.infn.it/config/cygno_htc -s {cf} {args.CE}'
+            input_wget_cmds = makeInputList(args.inputdir)
+            if len(input_wget_cmds)==0:
+                raise RuntimeError (f'ERROR: no input ROOT files found in {args.inputdir}. Exit.')
+            # parallelize more: 1job/input file
+            srcfiles=[]
+            for iw,wget in enumerate(input_wget_cmds):
+                job_file_name = f"{ijobdir}/job_{a}-{l}_job{iw}.sh"
+                log_file_name = f"{ijobdir}/job_{a}-{l}_job{iw}.log"
+                outfile_prefix = 'histograms_Run00001' # for 1 input file / job, this is always the name
+                tmp_file = open(job_file_name, 'w')
 
-    print (subcmd)
+                tmp_filecont = jobstring
+                tmp_filecont += f'\n{wget}'
+                tmp_filecont += cmd
+                tmp_filecont += f"\n./s3upload_put.py presign_job{iw}.json"
+                tmp_filecont += "\necho DONE.\n"
+                tmp_file.write(tmp_filecont)
+                tmp_file.close()
+                makePreSign(ijobdir,iw,f'{outfile_prefix}.root',args)
+                srcfiles.append(job_file_name)
+
+            condor_fname = f'{ijobdir}/submit.condor'
+            cf = makeCondorFile(condor_fname,ijobdir,srcfiles,con_file_name,args)
+            condorfiles.append(condor_fname)
+    print (f"Condor files:\n{condorfiles}")
+
+    with open(f'{absopath}/condor_submit_all.sh','w') as sub_all:
+        sub_all.write("#!/bin/bash\n\n")
+        for con in condorfiles:
+            sub_all.write(f'cygno_htc -s {con} {args.CE}\n')
+    print (f"READY to submit. Now source {absopath}/condor_submit_all.sh")
 
     sys.exit()
     
