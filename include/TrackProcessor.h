@@ -70,24 +70,6 @@ public:
                                std::vector<PMTVoxel>& pmt_voxels);
 
     /**
-     * @brief Computes the image without applying saturation.
-     *
-     * @param[in] x_hits_tr Vector of x coordinates of energy deposits.
-     * @param[in] y_hits_tr Vector of y coordinates of energy deposits.
-     * @param[in] z_hits_tr Vector of z coordinates of energy deposits.
-     * @param[in] energy_hits_tr Energy deposited at each hit.
-     * @param[in] image 2D image to be filled with the simulated event.
-     *
-     * @return False is track has to be skipped for some reason (e.g. negative drift length)
-     */
-    bool computeWithoutSaturation(const std::vector<double>& x_hits_tr,
-                                  const std::vector<double>& y_hits_tr,
-                                  const std::vector<double>& z_hits_tr,
-                                  const std::vector<double>& energy_hits_tr,
-                                  std::vector<std::vector<double>>& image);
-
-    
-    /**
      * @brief Applies vignetting correction to a 2D image using a vignette map.
      *
      * @param[in] image 2D pixel matrix to apply correction to.
