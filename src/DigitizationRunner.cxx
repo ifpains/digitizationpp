@@ -1116,7 +1116,7 @@ void DigitizationRunner::processRootFiles() {
                     // 1. Properties Setup
                     const double drift_field = config.getDouble("drift_field"); 
                     const double v_drift_mm_ns = Utils::compute_drift_velocity(drift_field) / 100.0;
-                    const double qe_factor = 0.0136; 
+                    const double qe_factor = 0.0136;        //average QE of PMT 
                 
                     // 2. Data Preparation                
                     double min_z = 1.0e9;

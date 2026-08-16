@@ -168,9 +168,6 @@ void SignalSimulation::gen_noise() {
         vector<double> fast_psd = load_txt_array(options_["fast_noise_path_" + pmt]);
         vector<double> slow_psd = load_txt_array(options_["slow_noise_path_" + pmt]);
 
-        //fast_noise_[pmt] = vector<double>(fast_psd.size(), 0.0);
-        //slow_noise_[pmt] = vector<double>(slow_psd.size(), 0.0);
-
         fast_noise_[pmt] = compute_noise(fast_psd, "Fast");
         slow_noise_[pmt] = compute_noise(slow_psd, "Slow");
     }
