@@ -187,24 +187,6 @@ void DigitizationRunner::setSeed(int seed) {
     return;
 }
 
-void DigitizationRunner::loadIonList4SRIM(ConfigManager& config, std::vector<std::vector<std::string>>& SRIM_events, const std::string& filename, const std::string& infolder) {
-    
-    auto delim1 = filename.find("part");
-    auto delim2 = filename.find(".root");
-    if(delim1==string::npos) throw runtime_error("Cannot determine the 'part' of the file.\n");
-    if(delim2==string::npos) throw runtime_error("Input file is not a root file.\n");
-    auto part= filename.substr(delim1+4, delim2-delim1-4);
-    cout<<"Using NR list from "<<config.get("NR_list")<<"_part"<<part<<".py"<<endl;
-
-
-    string nrlist = config.get("NR_list").c_str();
-    config.loadIonList(Form("%s/%s_part%s.py",
-                            infolder.c_str(), nrlist.c_str(), part.c_str()),
-                        SRIM_events);
-
-    return;
-}
-
 void DigitizationRunner::initSourceDir() {
     vector<string> path_to_config=Utils::splitString(configFile,'/');
     string parte= "";
@@ -235,10 +217,10 @@ void DigitizationRunner::SaveValues(shared_ptr<TFile>& outfile) {
         if(key!="tag"       && key !="Vig_Map" &&
            key!="bckg_path" && key !="ped_cloud_dir" &&
            key!="noiserun"  && key !="bckg_name" &&
-           key!="NR_list"   && key !="Camera_type" &&
+           key !="Camera_type" && key!="detector" &&
            key!="MC_xaxis"  && key !="MC_yaxis" &&
            key!="MC_zaxis"  && key!="digitizers" &&
-           key!="pmt_noise_cloud_dir"  && key!="detector" 
+           key!="pmt_noise_cloud_dir" 
            )
         {
             TH1F h(string(key).c_str(),"",1,0,1);
@@ -493,12 +475,6 @@ void DigitizationRunner::processRootFiles() {
         if (!isValidInputFile(filename)) continue;
         
         cout << "Processing: " << filename << endl;
-
-        // For SRIM: TO BE TESTED ON SRIM SIMS
-        vector<vector<string>> SRIM_events;
-        if(config.getBool("NR") && config.get("NR_list")!="") {
-            loadIonList4SRIM(config, SRIM_events, filename, infolder);
-        }
         
         auto f         = unique_ptr<TFile> {TFile::Open(filename.c_str())};
         auto inputtree = (TTree*)f->Get("nTuple");
@@ -551,8 +527,6 @@ void DigitizationRunner::processRootFiles() {
         Int_t numhits;
         Double_t energyDep;
         Double_t energyDep_NR;
-        Float_t  ekin_particle;
-        Int_t particle_type;
         vector<int>    *pdgID_hits = 0;
         vector<double> *tracklen_hits = 0;
         vector<double> *px_particle = 0;
@@ -567,27 +541,19 @@ void DigitizationRunner::processRootFiles() {
         inputtree->SetBranchAddress("eventnumber", &eventnumber);
         inputtree->SetBranchAddress("numhits", &numhits);
         
-        if(!config.getBool("SRIM")) { // TO BE CHECK ON REAL SRIM SIMULATIONS
-            inputtree->SetBranchAddress("energyDep",    &energyDep);
-            inputtree->SetBranchAddress("energyDep_NR", &energyDep_NR);
-            inputtree->SetBranchAddress("pdgID_hits",    &pdgID_hits);
-            inputtree->SetBranchAddress("tracklen_hits", &tracklen_hits);
-            inputtree->SetBranchAddress("px_particle", &px_particle);
-            inputtree->SetBranchAddress("py_particle", &py_particle);
-            inputtree->SetBranchAddress("pz_particle", &pz_particle);
-        }
+        inputtree->SetBranchAddress("energyDep",    &energyDep);
+        inputtree->SetBranchAddress("energyDep_NR", &energyDep_NR);
+        inputtree->SetBranchAddress("pdgID_hits",    &pdgID_hits);
+        inputtree->SetBranchAddress("tracklen_hits", &tracklen_hits);
+        inputtree->SetBranchAddress("px_particle", &px_particle);
+        inputtree->SetBranchAddress("py_particle", &py_particle);
+        inputtree->SetBranchAddress("pz_particle", &pz_particle);
             
         inputtree->SetBranchAddress("energyDep_hits", &energyDep_hits);
         inputtree->SetBranchAddress("energyDep_hits_NRQF", &energyDep_hits_NRQF);
         inputtree->SetBranchAddress("x_hits", &x_hits);
         inputtree->SetBranchAddress("y_hits", &y_hits);
         inputtree->SetBranchAddress("z_hits", &z_hits);
-            
-        
-        if(config.getBool("SRIM")) {// TO BE CHECK ON REAL SRIM SIMULATIONS
-            inputtree->SetBranchAddress("particle_type", &particle_type);
-            inputtree->SetBranchAddress("ekin_particle", &ekin_particle);
-        }
 
         // Fill Vignetting map if needed
         TH2F VignMap;
@@ -767,32 +733,20 @@ void DigitizationRunner::processRootFiles() {
                 
                 cout<<"\nEntry "<<entry<<", "<<entry+1-firstentry<< " / "<<lastentry+1-firstentry<<endl;
                     
-                if (config.getBool("SRIM")){
-                    cout<<"Energy "<<ekin_particle<<" keV"<<endl;
-                } else {
-                    cout<<"Energy "<<energyDep    <<" keV"<<endl;
-                }
+                cout<<"Energy "<<energyDep    <<" keV"<<endl;
     
                 bool NR_flag=false;
-                if(config.getBool("SRIM")) {
-                    energy            = ekin_particle;
-                    particle_type_out = particle_type;
-                    //if(particle_type_out==??) NR_flag=true;       Not known output from SRIM
-                } else {
-                    // this would be the energy of the primary particle - equal to
-                    // deposited energy only if it is completely contained in the sensitive volume
-                    // energy = ekin_particle * 1000;
-                    energy = energyDep;
-                    if (energyDep_NR>0){
-                        particle_type_out = is_NR(*pdgID_hits, int(1.e9));
-                        NR_flag = true;
-                    } 
-                    else particle_type_out = (*pdgID_hits)[0];  // this will tell us if the deposit was
-                    // started by a photon or an electron
-                }
+                // this would be the energy of the primary particle - equal to
+                // deposited energy only if it is completely contained in the sensitive volume
+                energy = energyDep;
+                if (energyDep_NR>0){
+                    particle_type_out = is_NR(*pdgID_hits, int(1.e9));
+                    NR_flag = true;
+                } 
+                else particle_type_out = (*pdgID_hits)[0];  // this will tell us if the deposit was
+                // started by a photon or an electron
     
                 if(!config.getBool("NR")   && NR_flag==true ) continue;
-                if(config.getBool("SRIM")  && ekin_particle>900) continue;     //not corrected for SRIM
                     
                 //initialize array values - to save info also if the track is skipped (background only)
                 row_cut         = -1;
@@ -873,101 +827,67 @@ void DigitizationRunner::processRootFiles() {
                 vector<double> y_hits_tr;
                 vector<double> z_hits_tr;
                 
-                // Coordinate transformation
-
-                if (config.getBool("SRIM")) {
-                    // x_hits_tr = np.array(tree.x_hits) + opt.x_offset
-                    // y_hits_tr = np.array(tree.y_hits) + opt.y_offset
-                    // z_hits_tr = np.array(tree.z_hits) + opt.z_offset
-                    vector<double> v1 = {1.,0.,0.};
-                    vector<double> v2 = {stod(SRIM_events[entry][3])-stod(SRIM_events[entry][2]),
-                                         stod(SRIM_events[entry][5])-stod(SRIM_events[entry][4]),
-                                         stod(SRIM_events[entry][7])-stod(SRIM_events[entry][6]),
-                                        };
+                ///// Coordinate transformation
+                // From MC input to digitization reference frame
                 
-                    double        angle = Utils::angleBetween(v1, v2);
-                    vector<double> axis =  Utils::crossProduct(v1, v2);
-               
-                    double norm = sqrt(inner_product(axis.begin(), axis.end(), axis.begin(), 0.0));
-                    vector<double> uaxis = {axis[0]/norm, axis[1]/norm, axis[2]/norm};
-                    // DEBUG
-                    //std::cout<<angle<<endl;
-                    //std::cout<<"-"<<axis[0]<<","<<axis[1]<<","<<axis[2]<<endl;
-                        
-                        
-                    for(int ihit=0; ihit < numhits; ihit++) {
-                        vector<double> tmpvec = {(*x_hits)[ihit], (*y_hits)[ihit], (*z_hits)[ihit]};
-                        vector<double> rotvec = Utils::rotateByAngleAndAxis(tmpvec, angle, uaxis);
-                        
-                        x_hits_tr.push_back(rotvec[0]+stod(SRIM_events[entry][2])+config.getDouble("x_offset"));
-                        y_hits_tr.push_back(rotvec[1]+stod(SRIM_events[entry][4])+config.getDouble("y_offset"));
-                        z_hits_tr.push_back(rotvec[2]+stod(SRIM_events[entry][6])+config.getDouble("z_offset"));
-                    }
-                    
-                } else {
-                    
-                    // From MC input to digitization reference frame
-                    
-                    // Axis mapping from input MC frame to digitization frame
-                    map<char, std::pair<char, double>> axis_map;
-                    axis_map['x'] = getAxisMapping(config.get("MC_xaxis"));  // MC x axis  = digit. axis, sign
-                    axis_map['y'] = getAxisMapping(config.get("MC_yaxis"));  // MC y axis  = digit. axis, sign
-                    axis_map['z'] = getAxisMapping(config.get("MC_zaxis"));  // MC z axis  = digit. axis, sign
-                    
-                    // Map from MC axis name to the corresponding input hit vector
-                    map<char, const vector<double>*> input_axes;
-                    input_axes['x'] = x_hits;
-                    input_axes['y'] = y_hits;
-                    input_axes['z'] = z_hits;
+                // Axis mapping from input MC frame to digitization frame
+                map<char, std::pair<char, double>> axis_map;
+                axis_map['x'] = getAxisMapping(config.get("MC_xaxis"));  // MC x axis  = digit. axis, sign
+                axis_map['y'] = getAxisMapping(config.get("MC_yaxis"));  // MC y axis  = digit. axis, sign
+                axis_map['z'] = getAxisMapping(config.get("MC_zaxis"));  // MC z axis  = digit. axis, sign
+                
+                // Map from MC axis name to the corresponding input hit vector
+                map<char, const vector<double>*> input_axes;
+                input_axes['x'] = x_hits;
+                input_axes['y'] = y_hits;
+                input_axes['z'] = z_hits;
 
-                    // Map from digitization axis name to the output hit vector
-                    map<char, vector<double>*> output_axes;
-                    output_axes['x'] = &x_hits_tr;
-                    output_axes['y'] = &y_hits_tr;
-                    output_axes['z'] = &z_hits_tr;
+                // Map from digitization axis name to the output hit vector
+                map<char, vector<double>*> output_axes;
+                output_axes['x'] = &x_hits_tr;
+                output_axes['y'] = &y_hits_tr;
+                output_axes['z'] = &z_hits_tr;
 
-                    // Perform transformation for each axis in digitization space
-                    const char axes[3] = {'x', 'y', 'z'};
-                    for (int i = 0; i < 3; ++i) {
-                        char digit_axis = axes[i];
-                        char mc_axis = 'n'; // n stands for still not defined
-                        
-                        // Retrieve the mapped MC axis and sign
-                        for (const auto& pair : axis_map) {
-                            const char map_mc_axis  = pair.first;
-                            char map_digit_axis     = pair.second.first;
-                            if (map_digit_axis == digit_axis) {
-                                mc_axis = map_mc_axis;
-                            }
+                // Perform transformation for each axis in digitization space
+                const char axes[3] = {'x', 'y', 'z'};
+                for (int i = 0; i < 3; ++i) {
+                    char digit_axis = axes[i];
+                    char mc_axis = 'n'; // n stands for still not defined
+                    
+                    // Retrieve the mapped MC axis and sign
+                    for (const auto& pair : axis_map) {
+                        const char map_mc_axis  = pair.first;
+                        char map_digit_axis     = pair.second.first;
+                        if (map_digit_axis == digit_axis) {
+                            mc_axis = map_mc_axis;
                         }
-                        pair<char, double> mapping = axis_map[mc_axis];
-                        double sign = mapping.second;
-                        
-                        // Get input vector (MC) and output vector (digitization)
-                        const vector<double>* input_vec = input_axes[mc_axis];
-                        vector<double>* output_vec = output_axes[digit_axis];
-                    
-                        // Get translation offset from config
-                        string offset_key = string(1, digit_axis) + "_offset";
-                        double offset = config.getDouble(offset_key);
-
-                        // Get extra translation from config
-                        string extra_key = string(1, digit_axis) + "_extra";
-                        double extra = config.getDouble(extra_key);
-                    
-                        // Transform all hits along this axis
-                        transform(input_vec->begin(), input_vec->end(),
-                                  back_inserter(*output_vec),
-                                  [sign, offset, extra](double val) {
-                                      return sign * val + offset + extra;
-                                  });
                     }
+                    pair<char, double> mapping = axis_map[mc_axis];
+                    double sign = mapping.second;
                     
-                    // NOTE: in Geant longitunal TPC axis is towards the GEMs, for the digi it's
-                    // assume it's towards the cathode
-                    
-                        
+                    // Get input vector (MC) and output vector (digitization)
+                    const vector<double>* input_vec = input_axes[mc_axis];
+                    vector<double>* output_vec = output_axes[digit_axis];
+                
+                    // Get translation offset from config
+                    string offset_key = string(1, digit_axis) + "_offset";
+                    double offset = config.getDouble(offset_key);
+
+                    // Get extra translation from config
+                    string extra_key = string(1, digit_axis) + "_extra";
+                    double extra = config.getDouble(extra_key);
+                
+                    // Transform all hits along this axis
+                    transform(input_vec->begin(), input_vec->end(),
+                                back_inserter(*output_vec),
+                                [sign, offset, extra](double val) {
+                                    return sign * val + offset + extra;
+                                });
                 }
+                
+                // NOTE: in Geant longitunal TPC axis is towards the GEMs, for the digi it's
+                // assume it's towards the cathode
+                
                     
                 // DEBUG
                 //if(entry == 0) {
@@ -1220,12 +1140,6 @@ void DigitizationRunner::processRootFiles() {
                     theta = -999;
                 }
                 
-                if(config.getBool("SRIM")) {
-                    track_length_3D = accumulate(tracklen_hits->begin(), tracklen_hits->end(), 0.0);
-                    px              = (*px_particle)[0];
-                    py              = (*py_particle)[0];
-                    pz              = (*pz_particle)[0];
-                }
             
                 auto tc = std::chrono::steady_clock::now();
                 std::chrono::duration<double> durtmpc=tc-ta;

@@ -66,10 +66,8 @@
 # Operative parameters
 'start_run_number'      : 0,	    # first number for outputfile: histograms_Run<start_run_number%5d>.root
 'NR'                    : True,     # 'True' for NR and ER digitization, 'False' for only ER
-'SRIM'                  : False,      # 'True' for SRIM NR simulations
-'NR_list'               : , #'NRlist_AmBeISO_LIME_neutrons_50cmPE_10cmCu_NOPb_10umStep', # Name of the SRIM MC NR_list file   
 'GEANT4isotopes'        : False,      # specify if you are digitizing tracks from radioactive isotope GEANT4 simulations
-'rootfiles'             : True,      # choose input type: True for G4 root iput, False for SRIM txt files
+'rootfiles'             : True,      # choose input type: True for G4 root iput, False for segmentation violation (at the moment)
 'events'                : -1,         # number of events to be processed, -1 = max allowed
 'donotremove'           : True,      # Remove or not the file from the tmp folder
 'fixed_seed'            : False,     # If 'True' the seed of random distributions is set to 10 (for debugging purposes)
