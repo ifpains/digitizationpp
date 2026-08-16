@@ -20,13 +20,16 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core/utility.hpp>
 #include <iostream>
+#include <cstdlib>
+#include <filesystem>
 
 using namespace cv;
 using namespace std;
 using namespace chrono;
 
 SignalSimulation::SignalSimulation(const map<string, vector<PMTData>>& hits_dict,
-                                   const map<string, string>& options)
+                                   const map<string, string>& options,
+                                   const string& SOURCE_DIR)
     : ptc_hits_(hits_dict), options_(options) {
         
     digitizers_ = options_["digitizers"];
@@ -48,6 +51,10 @@ SignalSimulation::SignalSimulation(const map<string, vector<PMTData>>& hits_dict
     gen.seed(rd());
     exp_dist_ = std::exponential_distribution<double>(exp_scale_);
     transit_dist_ = std::normal_distribution<double>(transit_time_mu_, transit_time_sigma_);
+
+    f_SOURCE_DIR = SOURCE_DIR;
+    f_DETECTOR = options_["detector"];
+    f_cloud_dir = options_["pmt_noise_cloud_dir"];
         
     set_t();
     gen_noise();
@@ -163,10 +170,35 @@ vector<double> SignalSimulation::load_txt_array(const string& filename) {
 }
 
 void SignalSimulation::gen_noise() {
-    vector<string> pmts = {"pmt_1", "pmt_2", "pmt_3", "pmt_4"};
+    vector<string> pmts;
+    for(int i=1;i<=stoi(options_["pmt_number"]);i++) 
+            pmts.push_back("pmt_"+to_string(i));
+
     for (const auto& pmt : pmts) {
-        vector<double> fast_psd = load_txt_array(options_["fast_noise_path_" + pmt]);
-        vector<double> slow_psd = load_txt_array(options_["slow_noise_path_" + pmt]);
+        string fname = f_DETECTOR+"_fast_noise_"+pmt+".txt";
+        string localname_fast = f_SOURCE_DIR+"pmt/"+fname;
+
+        if(!std::filesystem::exists(localname_fast.c_str())) {
+            int ret;
+            string downloadname = "https://s3.cr.cnaf.infn.it:7480/cygno:"+ f_cloud_dir + "/" + fname;      //maybe to be fixed with s3, but needs to change s3
+            ret=system(("wget "+ downloadname).c_str());
+            ret=system(("mv "+fname + " " + localname_fast).c_str());
+            if(ret!=0) cout<<"Ouch error using system moving file "<<fname<<endl;
+        }
+
+        fname = f_DETECTOR+"_slow_noise_"+pmt+".txt";
+        string localname_slow = f_SOURCE_DIR+"pmt/"+fname;
+
+        if(!std::filesystem::exists(localname_slow.c_str())) {
+            int ret;
+            string downloadname = "https://s3.cr.cnaf.infn.it:7480/cygno:"+ f_cloud_dir + "/" + fname;      //maybe to be fixed with s3, but needs to change s3
+            ret=system(("wget "+ downloadname).c_str());
+            ret=system(("mv "+fname + " " + localname_slow).c_str());
+            if(ret!=0) cout<<"Ouch error using system moving file "<<fname<<endl;
+        }
+
+        vector<double> fast_psd = load_txt_array(localname_fast);
+        vector<double> slow_psd = load_txt_array(localname_slow);
 
         fast_noise_[pmt] = compute_noise(fast_psd, "Fast");
         slow_noise_[pmt] = compute_noise(slow_psd, "Slow");

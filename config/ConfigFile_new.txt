@@ -82,6 +82,8 @@
 ## PMT side
 # PMT simulation parameters
 'pmt_mode'              : True,       # 'True' for PMT simulation
+'pmt_noise_cloud_dir'       : 'cygno-sim/Useful_for_digi/PMTnoise_template',    # directory inside the cloud bucket where the noise files are located
+'detector'              : 'LIME',      # This will allow to select the noise files (LIME, GIN, MAN, CYGNO04, CUSTOM)
 'pmt_number'            : 4,          # Number of PMTs
 'dist_gem_pmt'          : 190,        # Z distance from GEM plane (GEM is at z = 0)
 'pmt_radius'            : 11,         # Radius of PMT R7378A
@@ -112,16 +114,5 @@
 'fast_freq'             : 750e6,      # Sampling frequency of fast digitizer (Hz)
 'slow_freq'             : 250e6,      # Sampling frequency of slow digitizer (Hz)
 'digitizers'            : 'Both',     # Indicates which digitizers to simulate: 'Fast', 'Slow' or 'Both'
-
-## Noise PSDs paths
-'fast_noise_path_pmt_1' : ../pmt/noise_psd/fast_noise_ch1.txt,  # Fast noise PSD for PMT 1
-'fast_noise_path_pmt_2' : ../pmt/noise_psd/fast_noise_ch2.txt,  # Fast noise PSD for PMT 2
-'fast_noise_path_pmt_3' : ../pmt/noise_psd/fast_noise_ch3.txt,  # Fast noise PSD for PMT 3
-'fast_noise_path_pmt_4' : ../pmt/noise_psd/fast_noise_ch4.txt,  # Fast noise PSD for PMT 4
-
-'slow_noise_path_pmt_1' : ../pmt/noise_psd/slow_noise_ch1.txt,  # Slow noise PSD for PMT 1
-'slow_noise_path_pmt_2' : ../pmt/noise_psd/slow_noise_ch2.txt,  # Slow noise PSD for PMT 2
-'slow_noise_path_pmt_3' : ../pmt/noise_psd/slow_noise_ch3.txt,  # Slow noise PSD for PMT 3
-'slow_noise_path_pmt_4' : ../pmt/noise_psd/slow_noise_ch4.txt,  # Slow noise PSD for PMT 4
 
 }

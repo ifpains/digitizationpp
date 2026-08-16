@@ -38,9 +38,11 @@ public:
      * @brief Constructor for SignalSimulation.
      * @param hits_dict Dictionary containing hit data per voxel and per PMT.
      * @param options Map containing configuration parameters (gains, frequencies, paths).
+     * @param string containing the path position of the main folder.
      */
     SignalSimulation(const map<string, vector<PMTData>>& hits_dict,
-                     const map<string, string>& options);
+                     const map<string, string>& options,
+                     const string& SOURCE_DIR);
 
     /**
      * @brief Initializes the time vectors for fast and slow digitizers based on sampling frequencies.
@@ -158,6 +160,10 @@ private:
     vector<double> t_fast_, t_slow_;              /**< Time vectors for both digitizers. */
     map<string, vector<double>> fast_noise_;      /**< Generated fast noise per PMT channel. */
     map<string, vector<double>> slow_noise_;      /**< Generated slow noise per PMT channel. */
+
+    std::string f_SOURCE_DIR = "";    /**< Path to event source directory*/
+    std::string f_DETECTOR = "";      /**< Detector name taken from options*/
+    std::string f_cloud_dir = "";     /**< Directory inside the cloud bucket where the noise files are located*/
 };
 
 #endif

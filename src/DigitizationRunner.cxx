@@ -238,7 +238,7 @@ void DigitizationRunner::SaveValues(shared_ptr<TFile>& outfile) {
            key!="NR_list"   && key !="Camera_type" &&
            key!="MC_xaxis"  && key !="MC_yaxis" &&
            key!="MC_zaxis"  && key!="digitizers" &&
-           key.find("noise_path") == string::npos
+           key!="pmt_noise_cloud_dir"  && key!="detector" 
            )
         {
             TH1F h(string(key).c_str(),"",1,0,1);
@@ -1156,7 +1156,7 @@ void DigitizationRunner::processRootFiles() {
                 
                         // Signal Simulation Step
                         auto sig_start = std::chrono::steady_clock::now();
-                        SignalSimulation simulator(pmt_hits_map, pmt_options);
+                        SignalSimulation simulator(pmt_hits_map, pmt_options, SOURCE_DIR);
                         std::map<std::string, std::vector<double>> fast_signals, slow_signals;
                         simulator.simulated_signals(fast_signals, slow_signals);
                         auto sig_end = std::chrono::steady_clock::now();
