@@ -16,6 +16,19 @@
 #include <map>
 
 /**
+ * @struct PMTVoxel
+ * @brief Stores photon emission data from a specific 3D spatial bin (voxel) for PMT simulation.
+ * * This structure acts as a bridge between the track digitization and the PMT propagation model,
+ * capturing the absolute position and the number of photons produced after saturation effects.
+ */
+struct PMTVoxel {
+    double x;          /**< X coordinate of the photon emission point [mm] */
+    double y;          /**< Y coordinate of the photon emission point [mm] */
+    double z;          /**< Z coordinate of the photon emission point [mm] */
+    double n_photons;  /**< Number of photons produced in this voxel after saturation */
+};
+
+/**
  * @class TrackProcessor
  * @author Stefano Piacentini
  * @brief Executes the digitization of Monte Carlo hits including charge smearing, gain application, and vignetting.
@@ -42,6 +55,7 @@ public:
      * @param[in] energy Total event energy.
      * @param[in] NR_flag Flag indicating if the event is a nuclear recoil.
      * @param[in] image 2D image to be filled with the simulated event.
+     * @param[in] Voxel 2D image to be filled with the simulated event. (FIXME)
      *
      * @return False is track has to be skipped for some reason (e.g. negative drift length)
      */
@@ -52,26 +66,9 @@ public:
                                const TH2F& VignMap,
                                float energy,
                                bool NR_flag,
-                               std::vector<std::vector<double>>& image);
+                               std::vector<std::vector<double>>& image,
+                               std::vector<PMTVoxel>& pmt_voxels);
 
-    /**
-     * @brief Computes the image without applying saturation.
-     *
-     * @param[in] x_hits_tr Vector of x coordinates of energy deposits.
-     * @param[in] y_hits_tr Vector of y coordinates of energy deposits.
-     * @param[in] z_hits_tr Vector of z coordinates of energy deposits.
-     * @param[in] energy_hits_tr Energy deposited at each hit.
-     * @param[in] image 2D image to be filled with the simulated event.
-     *
-     * @return False is track has to be skipped for some reason (e.g. negative drift length)
-     */
-    bool computeWithoutSaturation(const std::vector<double>& x_hits_tr,
-                                  const std::vector<double>& y_hits_tr,
-                                  const std::vector<double>& z_hits_tr,
-                                  const std::vector<double>& energy_hits_tr,
-                                  std::vector<std::vector<double>>& image);
-
-    
     /**
      * @brief Applies vignetting correction to a 2D image using a vignette map.
      *
