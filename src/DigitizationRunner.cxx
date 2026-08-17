@@ -636,15 +636,16 @@ void DigitizationRunner::processRootFiles() {
             std::unique_ptr<std::vector<uint16_t>> redpix_iz = std::make_unique<std::vector<uint16_t>>();
             
              // PMT Waveforms (Fast and Slow) ---
-            std::unique_ptr<std::vector<double>> wav_fast_pmt1 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_fast_pmt2 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_fast_pmt3 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_fast_pmt4 = std::make_unique<std::vector<double>>();
+            //std::unique_ptr<std::vector<double>> wav_fast_pmt1 = std::make_unique<std::vector<double>>();
+            std::vector<double> wav_fast_pmt1;
+            std::vector<double> wav_fast_pmt2;
+            std::vector<double> wav_fast_pmt3;
+            std::vector<double> wav_fast_pmt4;
 
-            std::unique_ptr<std::vector<double>> wav_slow_pmt1 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_slow_pmt2 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_slow_pmt3 = std::make_unique<std::vector<double>>();
-            std::unique_ptr<std::vector<double>> wav_slow_pmt4 = std::make_unique<std::vector<double>>();
+            std::vector<double> wav_slow_pmt1;
+            std::vector<double> wav_slow_pmt2;
+            std::vector<double> wav_slow_pmt3;
+            std::vector<double> wav_slow_pmt4;
             
 
             // ROOT TTree
@@ -694,15 +695,16 @@ void DigitizationRunner::processRootFiles() {
             outtree->Branch("redpix_iz", redpix_iz.get());
             if (config.getBool("pmt_mode")) {
                 // Create branches for PMT waveforms
-                outtree->Branch("wav_fast_pmt1", wav_fast_pmt1.get());
-                outtree->Branch("wav_fast_pmt2", wav_fast_pmt2.get());
-                outtree->Branch("wav_fast_pmt3", wav_fast_pmt3.get());
-                outtree->Branch("wav_fast_pmt4", wav_fast_pmt4.get());
+                //outtree->Branch("wav_fast_pmt1", wav_fast_pmt1.get());
+                outtree->Branch("wav_fast_pmt1", &wav_fast_pmt1);
+                outtree->Branch("wav_fast_pmt2", &wav_fast_pmt2);
+                outtree->Branch("wav_fast_pmt3", &wav_fast_pmt3);
+                outtree->Branch("wav_fast_pmt4", &wav_fast_pmt4);
 
-                outtree->Branch("wav_slow_pmt1", wav_slow_pmt1.get());
-                outtree->Branch("wav_slow_pmt2", wav_slow_pmt2.get());
-                outtree->Branch("wav_slow_pmt3", wav_slow_pmt3.get());
-                outtree->Branch("wav_slow_pmt4", wav_slow_pmt4.get());
+                outtree->Branch("wav_slow_pmt1", &wav_slow_pmt1);
+                outtree->Branch("wav_slow_pmt2", &wav_slow_pmt2);
+                outtree->Branch("wav_slow_pmt3", &wav_slow_pmt3);
+                outtree->Branch("wav_slow_pmt4", &wav_slow_pmt4);
             }
 
             int start = firstentry + digipart * NMAX_EVENTS;
@@ -716,8 +718,8 @@ void DigitizationRunner::processRootFiles() {
                 redpix_iz->clear();
                 
                 if (config.getBool("pmt_mode")) {
-                    wav_fast_pmt1->clear(); wav_fast_pmt2->clear(); wav_fast_pmt3->clear(); wav_fast_pmt4->clear();
-                    wav_slow_pmt1->clear(); wav_slow_pmt2->clear(); wav_slow_pmt3->clear(); wav_slow_pmt4->clear();
+                    wav_fast_pmt1.clear(); wav_fast_pmt2.clear(); wav_fast_pmt3.clear(); wav_fast_pmt4.clear();
+                    wav_slow_pmt1.clear(); wav_slow_pmt2.clear(); wav_slow_pmt3.clear(); wav_slow_pmt4.clear();
                 }
 
                 inputtree->GetEntry(entry);
@@ -1050,14 +1052,15 @@ void DigitizationRunner::processRootFiles() {
                         std::cout << "[DEBUG] Signal simulation (pmt_sim) took: " << sig_time.count() << " s" << std::endl;
                 
                         // 4. Output Assignment
-                        *wav_fast_pmt1 = fast_signals["pmt_1"];
-                        *wav_fast_pmt2 = fast_signals["pmt_2"];
-                        *wav_fast_pmt3 = fast_signals["pmt_3"];
-                        *wav_fast_pmt4 = fast_signals["pmt_4"];
-                        *wav_slow_pmt1 = slow_signals["pmt_1"];
-                        *wav_slow_pmt2 = slow_signals["pmt_2"];
-                        *wav_slow_pmt3 = slow_signals["pmt_3"];
-                        *wav_slow_pmt4 = slow_signals["pmt_4"];
+                        //*wav_fast_pmt1 = fast_signals["pmt_1"];
+                        wav_fast_pmt1 = fast_signals["pmt_1"];
+                        wav_fast_pmt2 = fast_signals["pmt_2"];
+                        wav_fast_pmt3 = fast_signals["pmt_3"];
+                        wav_fast_pmt4 = fast_signals["pmt_4"];
+                        wav_slow_pmt1 = slow_signals["pmt_1"];
+                        wav_slow_pmt2 = slow_signals["pmt_2"];
+                        wav_slow_pmt3 = slow_signals["pmt_3"];
+                        wav_slow_pmt4 = slow_signals["pmt_4"];
                     }
                 
                     auto pmt_end = std::chrono::steady_clock::now();
