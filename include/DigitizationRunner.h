@@ -114,18 +114,6 @@ private:
      void setSeed(int seed = 10);
  
      /**
-      * @brief Loads ion list for SRIM format events.
-      * @param[in] config ConfigManager object.
-      * @param[in] SRIM_events Container to store parsed events.
-      * @param[in] filename File name of the ion list.
-      * @param[in] infolder Path to the input folder.
-      */
-     void loadIonList4SRIM(ConfigManager& config,
-                           std::vector<std::vector<std::string>>& SRIM_events,
-                           const std::string& filename,
-                           const std::string& infolder);
- 
-     /**
       * @brief Initializes the source directory based on configFile variable.
       */
      void initSourceDir();
@@ -225,6 +213,7 @@ private:
      *       `digi_RunXXXXX.root` and outputs histograms accordingly.
      */
      void generateHistogramsFromDigi();
+
  
      ConfigManager config;           ///< Configuration manager
      std::string configFile;         ///< Path to the config file

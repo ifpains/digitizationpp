@@ -30,15 +30,19 @@
 using namespace std;
 
 TrackProcessor::TrackProcessor(ConfigManager& configMgr)
-    : config(configMgr) {}
+    : config(configMgr) {
+        N_primaries_reaching_GEMs = -1;
+    }
 
-void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
+bool TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                            const vector<double>& y_hits_tr,
                                            const vector<double>& z_hits_tr,
                                            const vector<double>& energy_hits,
+                                           const TH2F& VignMap,
                                            float energy,
                                            bool NR_flag,
-                                           vector<vector<double>>& image)
+                                           vector<vector<double>>& image,
+                                           vector<PMTVoxel>& pmt_voxels)
 {
     // vectorized smearing
     vector<float> S3D_x;
@@ -46,7 +50,7 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
     vector<float> S3D_z;
     
     // if there are no electrons on GEM3, just use empty image
-    if (x_hits_tr.size() == 0) return;
+    if (x_hits_tr.size() == 0) return true;
     // if there are electrons on GEM3, apply saturation effect
     else {
         double OFF = 15;
@@ -191,7 +195,20 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                     int yy = ((key - zz) / N) % M;
                     int xx = (key - yy * N - zz) / N / M;
                     // optbeta is multiplied by factors to normalize on volume chosen
-                    hout[xx][yy]+=Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    double n_ph_val = Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    hout[xx][yy]+=n_ph_val;
+
+                    // --- PMT Simulation Integration ---
+                    if (n_ph_val > 0) {
+                        PMTVoxel voxel;
+                        // Convert bin indices back to physical coordinates (mm)
+                        voxel.x = (xx * xbin_dim) + xmin;
+                        voxel.y = (yy * ybin_dim) + ymin;
+                        voxel.z = (zz * zbin_dim) + zmin; 
+                        
+                        voxel.n_photons = n_ph_val;
+                        pmt_voxels.push_back(voxel);
+                    }
                 }
                 auto endampli = std::chrono::steady_clock::now();
                 dur_ampli=dur_ampli+endampli-startampli;
@@ -199,7 +216,10 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
             } else {
 
                 auto startsmear = std::chrono::steady_clock::now();
-                cloud_smearing3D(x_hits_tr, y_hits_tr, z_hits_tr, energy_hits, S3D_x, S3D_y, S3D_z);
+                if(!cloud_smearing3D(x_hits_tr, y_hits_tr, z_hits_tr, energy_hits, S3D_x, S3D_y, S3D_z)) {
+                    std::cerr << "Warning: TrackProcessor::computeWithSaturation: skipping this track because of error from TrackProcessor::cloud_smearing3D."<<std::endl;
+                    return false;
+                }
                 auto endsmear = std::chrono::steady_clock::now();
                 dur_smear=dur_smear+endsmear-startsmear;
                 size_tot+=S3D_z.size();
@@ -264,7 +284,20 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                     int yy = ((key - zz) / N) % M;
                     int xx = (key - yy * N - zz) / N / M;
                     // optbeta is multiplied by factors to normalize on volume chosen
-                    hout[xx][yy]+=Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    double n_ph_val = Nph_saturation(val, optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                    hout[xx][yy]+=n_ph_val;
+                    
+                    // --- PMT Simulation Integration ---
+                    if (n_ph_val > 0) {
+                        PMTVoxel voxel;
+                        // Convert bin indices back to physical coordinates (mm)
+                        voxel.x = (xx * xbin_dim) + xmin;
+                        voxel.y = (yy * ybin_dim) + ymin;
+                        voxel.z = (zz * zbin_dim) + zmin; 
+                        
+                        voxel.n_photons = n_ph_val;
+                        pmt_voxels.push_back(voxel);
+                    }
                 }
                 auto endampli = std::chrono::steady_clock::now();
                 dur_ampli=dur_ampli+endampli-startampli;
@@ -315,7 +348,10 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                         
                         //cout<<"Smearing..."<<endl<<flush;
                         auto startsmear = std::chrono::steady_clock::now();
-                        cloud_smearing3D(x_hits_tr_i, y_hits_tr_i, z_hits_tr_i, energy_hits_i, S3D_x, S3D_y, S3D_z);
+                        if(!cloud_smearing3D(x_hits_tr_i, y_hits_tr_i, z_hits_tr_i, energy_hits_i, S3D_x, S3D_y, S3D_z)) {
+                            std::cerr << "Warning: TrackProcessor::computeWithSaturation: skipping this track because of error from TrackProcessor::cloud_smearing3D."<<std::endl;
+                            return false;
+                        }
                         auto endsmear = std::chrono::steady_clock::now();
                         dur_smear=dur_smear+endsmear-startsmear;
                         size_tot+=S3D_z.size();
@@ -363,7 +399,21 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                 if(hc[xx][yy][zz] != 0.) {
                                     not_empty++;
                                     // optbeta is multiplied by factors to normalize on volume chosen
-                                    hout[xx][yy]+=Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                                    double n_ph_val = Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+
+                                    hout[xx][yy] += n_ph_val;
+                                    
+                                    // --- PMT Simulation Integration ---
+                                    if (n_ph_val > 0) {
+                                        PMTVoxel voxel;
+                                        // Convert bin indices back to physical coordinates (mm)
+                                        voxel.x = (xx * xbin_dim) + xmin;
+                                        voxel.y = (yy * ybin_dim) + ymin;
+                                        voxel.z = (zz * zbin_dim) + split_vals[i];
+                                        
+                                        voxel.n_photons = n_ph_val;
+                                        pmt_voxels.push_back(voxel);
+                                    }   
                                 }
                             }
                         }
@@ -375,7 +425,10 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
 
                 } else {
                     auto startsmear = std::chrono::steady_clock::now();
-                    cloud_smearing3D(x_hits_tr, y_hits_tr, z_hits_tr, energy_hits, S3D_x, S3D_y, S3D_z);
+                    if(!cloud_smearing3D(x_hits_tr, y_hits_tr, z_hits_tr, energy_hits, S3D_x, S3D_y, S3D_z)) {
+                        std::cerr << "Warning: TrackProcessor::computeWithSaturation: skipping this track because of error from TrackProcessor::cloud_smearing3D."<<std::endl;
+                        return false;
+                    }
                     auto endsmear = std::chrono::steady_clock::now();
                     dur_smear=dur_smear+endsmear-startsmear;
                     size_tot+=S3D_z.size();
@@ -422,7 +475,21 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
                                 if(hc[xx][yy][zz] != 0.) {
                                     not_empty++;
                                     // optbeta is multiplied by factors to normalize on volume chosen
-                                    hout[xx][yy]+=Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+                                    double n_ph_val = Nph_saturation(hc[xx][yy][zz], optA, optbeta*xy_vox_scale*xy_vox_scale*0.1/zbin_dim);
+
+                                    hout[xx][yy] += n_ph_val;
+
+                                    // --- PMT Simulation Integration ---
+                                    if (n_ph_val > 0) {
+                                        PMTVoxel voxel;
+                                        // Convert bin indices back to physical coordinates (mm)
+                                        voxel.x = (xx * xbin_dim) + xmin;
+                                        voxel.y = (yy * ybin_dim) + ymin;
+                                        voxel.z = (zz * zbin_dim) + split_vals[i];
+                                        
+                                        voxel.n_photons = n_ph_val;
+                                        pmt_voxels.push_back(voxel);
+                                    } 
                                 }
                             }
                         }
@@ -440,28 +507,18 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
         std::cout << "Time Critical " << dur_criti.count() << " seconds" <<std::endl;
         std::cout << "Time ampli " << dur_ampli.count() << " seconds" <<std::endl;
         
-        // Applying camera response + Poisson smearing
-        for_each(hout.begin(), hout.end(),[&](std::vector<int>& v)  {
-            transform (v.begin(), v.end(), v.begin(), [&] (int elem){
-                return gRandom->Poisson(elem *
-                                        omega *
-                                        optphotons_per_el *
-                                        optcounts_per_photon);
-            });
-        });       
-        
-        // Padding
+        // Padding [Now before camera digitization because needed for VignMap]
         // FIXME: Write a function padding()
         //Define a translation vector
         
         // DEBUG
-        //int sommatotale =0;
-        //
-        //sommatotale = accumulate(hout.cbegin(), hout.cend(), 0, [](auto sum, const auto& row) {
-        //            return accumulate(row.cbegin(), row.cend(), sum);
-        //        });
-        //
-        //cout<<"INT = "<<sommatotale<<endl;
+        // int sommatotale =0;
+        
+        // sommatotale = accumulate(hout.cbegin(), hout.cend(), 0, [](auto sum, const auto& row) {
+        //             return accumulate(row.cbegin(), row.cend(), sum);
+        //         });
+        
+        // cout<<"DEBUG: INT = "<<sommatotale<<endl;
 
         int x_center_cloud=(int)round(((xmax+xmin)/2.)/xbin_dim);
         int y_center_cloud=(int)round(((ymax+ymin)/2.)/ybin_dim);
@@ -483,64 +540,59 @@ void TrackProcessor::computeWithSaturation(const vector<double>& x_hits_tr,
         int x_end   = min(x_pix*xy_vox_scale, x_start + (int)hout.size());
         int y_end   = min(y_pix*xy_vox_scale, y_start + (int)hout[0].size());
         // cout<<"PADDING ["<<x_start<<":"<<x_end<<","<<y_start<<":"<<y_end<<"]"<<endl;
-        
+
+        // Adding voxels to the same pixel before applying camera response
         for(int xx=x_start; xx<x_end; xx++){
             for(int yy=y_start; yy<y_end; yy++){
                 image[xx/xy_vox_scale][yy/xy_vox_scale]+=hout[xx-x_start][yy-y_start];
             }
         }
         
+        // Applying Poisson smearing + camera response
+        for(unsigned int ii = 0; ii<image.size(); ii++) {
+            for(unsigned int jj = 0; jj<image[0].size(); jj++) {
+                if (image[ii][jj] != 0) {
+                    // Vignetting
+                    double _vigtmp = 1.0;
+                    if(config.getBool("Vignetting")) {
+                        _vigtmp = VignMap.GetBinContent(VignMap.GetXaxis()->FindBin(ii),
+                                                        VignMap.GetYaxis()->FindBin(jj)
+                                                          );
+                    }
+                    
+                    // Generate number of photons reaching camera
+                    const int _number_of_photons = gRandom->Poisson(static_cast<double>(image[ii][jj])
+                                                                   * _vigtmp
+                                                                   * omega
+                                                                   * camera_quantum_efficiency
+                                                                   * optphotons_per_el);
+                    
+                    // Average number of electrons
+                    const double _mu = static_cast<double>(_number_of_photons) * optcounts_per_photon;
+
+                    image[ii][jj] = static_cast<int>(_mu);
+                    // Fluctuations of electrons // not needed if we sum random pedestal!!!
+                    // if(_mu!=0) {
+                    //     const double _smeared = gRandom-> Gaus(_mu, camera_electron_rms*optcounts_per_photon);
+
+                    //     // If negative -> zero, but should happen very rarely
+                    //     const double _nonneg  = (_smeared < 0.0) ? 0.0 : _smeared;
+    
+                    //     // Return integer number
+                    //     image[ii][jj] =  static_cast<int>(std::lround(_nonneg));
+                    // } else {
+                    //     image[ii][jj] = 0;
+                    // }
+                }
+            }
+        }
+        
     }
-    return;
-
+    return true;
 
 }
 
-void TrackProcessor::computeWithoutSaturation(const std::vector<double>& x_hits_tr,
-                                              const std::vector<double>& y_hits_tr,
-                                              const std::vector<double>& z_hits_tr,
-                                              const std::vector<double>& energy_hits,
-                                              std::vector<std::vector<double>>& image)
-{
-
-    vector<vector<double>> signal(x_pix, vector<double>(y_pix, 0.0));
-
-    vector<float> S2D_x;
-    vector<float> S2D_y;
-    ph_smearing2D(x_hits_tr, y_hits_tr, z_hits_tr, energy_hits, S2D_x, S2D_y);
-
-    // Vector to store all indices
-    vector<size_t> indices(S2D_x.size());
-    // Fill indices with 0, 1, 2, ..., numbers.size() - 1
-    iota(indices.begin(), indices.end(), 0);
-
-    double optx_dim = config.getDouble("x_dim");
-    double optx_pix = static_cast<double>(x_pix);
-    double opty_dim = config.getDouble("y_dim");
-    double opty_pix = static_cast<double>(y_pix);
-
-    // THIS IS THE COMPUTATIONALLY EXPENSIVE PART
-    for_each(indices.begin(), indices.end(), [&](int ihit) {
-        int xx = floor((0.5 * optx_dim + S2D_x[ihit]) * optx_pix / optx_dim);
-        int yy = floor((0.5 * opty_dim + S2D_y[ihit]) * opty_pix / opty_dim);
-        signal[xx][yy] += 1.;
-    });
-
-    // DEBUG
-    //double ntot =0.;
-    //for(unsigned int xx = 0; xx<signal.size(); xx++) {
-    //    for(unsigned int yy = 0; yy<signal[0].size(); yy++) {
-    //        ntot+=signal[xx][yy];
-    //    }
-    //}
-    //cout<<"Tot num of sensor counts after GEM3 without saturation: "<<ntot<<endl;
-
-    image = signal;
-
-    return;
-}
-
-void TrackProcessor::cloud_smearing3D(const vector<double>& x_hits_tr,
+bool TrackProcessor::cloud_smearing3D(const vector<double>& x_hits_tr,
                                       const vector<double>& y_hits_tr,
                                       const vector<double>& z_hits_tr,
                                       const vector<double>& energy_hits,
@@ -549,6 +601,11 @@ void TrackProcessor::cloud_smearing3D(const vector<double>& x_hits_tr,
                                       vector<float>& S3D_z) {
 
     vector<double> nel = NelGEM2(energy_hits, z_hits_tr);
+    if (nel.empty()) {
+        std::cerr << "Warning: TrackProcessor::cloud_smearing3D: skipping this track because of empty result from TrackProcessor::NelGEM2."<<std::endl;
+        return false;
+    }
+    
     //DEBUG
     //for(unsigned int i=0; i<nel.size(); i++) {
     //    cout<<nel[i]<<"\n";
@@ -570,7 +627,7 @@ void TrackProcessor::cloud_smearing3D(const vector<double>& x_hits_tr,
     //    cout<<S3D_x[i]<<endl;
     //}
 
-    return;
+    return true;
 }
 
 
@@ -610,6 +667,9 @@ void TrackProcessor::smear_parallel(const vector<double>& x_axis_hit,const vecto
     X.reserve(nelsum);
     Y.reserve(nelsum);
     Z.reserve(nelsum);
+
+    // Fixed random seed
+    bool fixedSeed = config.getBool("fixed_seed");
     
     // Create a vector of indices where each index i is repeated nel[i] times
     vector<long int> indices(nelsum);
@@ -637,7 +697,9 @@ void TrackProcessor::smear_parallel(const vector<double>& x_axis_hit,const vecto
             vector<float> x_paralvec,y_paralvec,z_paralvec;
             TRandom3 paralrandom;
             myMutex.lock();
-            paralrandom.SetSeed(floor(gRandom->Rndm()*10000));
+            //deterministic seed from chunk start
+            if(fixedSeed) paralrandom.SetSeed(3+static_cast<UInt_t>(range.begin()));
+            else paralrandom.SetSeed(floor(gRandom->Rndm()*10000));
             myMutex.unlock();
             for(auto iterator=range.begin();iterator<range.end();++iterator)
             {
@@ -692,7 +754,8 @@ vector<double> TrackProcessor::NelGEM2(const vector<double>& energyDep, const ve
     transform(drift_l.begin(), drift_l.end(), negatives.begin(),
               [](int x) { return x < 0; });
     if (any_of(negatives.begin(), negatives.end(), [](bool b) { return b; })) {
-        throw runtime_error("TrackProcessor::NelGEM2: track contains hits with negative drift length.\n");
+        std::cerr << "Warning: TrackProcessor::NelGEM2: track contains hits with negative drift length."<<std::endl;
+        return {};  // empty vector signals "skip"
     }
     
     vector<double> n_ioniz_el_mean(n_ioniz_el_ini.size(), 0.0);
@@ -704,6 +767,10 @@ vector<double> TrackProcessor::NelGEM2(const vector<double>& energyDep, const ve
     transform(n_ioniz_el_mean.begin(), n_ioniz_el_mean.end(), n_ioniz_el.begin(), [&] (double a) {
         return gRandom->Poisson(a);
     });
+
+    N_primaries_reaching_GEMs = std::accumulate(n_ioniz_el.begin(), n_ioniz_el.end(), 0.0);
+    std::cout << "Number of primaries reaching GEMs: " << N_primaries_reaching_GEMs << std::endl;
+    
     
     // total number of secondary electrons considering the gain in the 2nd GEM foil
     vector<double> n_tot_el = NelGEM1(n_ioniz_el);
@@ -741,7 +808,7 @@ double TrackProcessor::Nph_saturation(int nel, double A, double beta) {
 }
 
 
-void TrackProcessor::ph_smearing2D( const vector<double>& x_hits_tr,
+bool TrackProcessor::ph_smearing2D( const vector<double>& x_hits_tr,                        //Function still to be corrected
                                     const vector<double>& y_hits_tr,
                                     const vector<double>& z_hits_tr,
                                     const vector<double>& energy_hits,
@@ -750,6 +817,10 @@ void TrackProcessor::ph_smearing2D( const vector<double>& x_hits_tr,
 
     // Electrons in GEM2
     vector<double> nel = NelGEM2(energy_hits, z_hits_tr);
+    if (nel.empty()) {
+        std::cerr << "Warning: TrackProcessor::ph_smearing2D: skipping this track because of empty result from TrackProcessor::NelGEM2."<<std::endl;
+        return false;
+    }
 
     double optphotons_per_el    = config.getDouble("photons_per_el");
     double optA                 = config.getDouble("A");
@@ -764,7 +835,7 @@ void TrackProcessor::ph_smearing2D( const vector<double>& x_hits_tr,
     S2D_x = smear(x_hits_tr, sigma_xy, nph);
     S2D_y = smear(y_hits_tr, sigma_xy, nph);
 
-    return;
+    return true;
 }
 
 void TrackProcessor::TrackVignetting(vector<vector<double>>& image, int xpix, int ypix, const TH2F & VignMap) {

@@ -76,6 +76,8 @@ add_executable(digitizationpp
                "${PROJECT_SOURCE_DIR}/src/Globals.cxx"#
                "${PROJECT_SOURCE_DIR}/src/TrackProcessor.cxx"
                "${PROJECT_SOURCE_DIR}/src/Utils.cxx"
+               "${PROJECT_SOURCE_DIR}/src/PMTHits.cxx"
+               "${PROJECT_SOURCE_DIR}/src/PMTSignal.cxx"
                )
 target_link_libraries(digitizationpp PUBLIC ${ROOT_LIBRARIES} ${OpenCV_LIBS} s3 curl rootana cygnolib z opencv_imgcodecs opencv_core tbb)
 
@@ -86,6 +88,8 @@ add_executable(joinPeds
                "${PROJECT_SOURCE_DIR}/src/Globals.cxx"#
                "${PROJECT_SOURCE_DIR}/src/TrackProcessor.cxx"
                "${PROJECT_SOURCE_DIR}/src/Utils.cxx"
+               "${PROJECT_SOURCE_DIR}/src/PMTHits.cxx"
+               "${PROJECT_SOURCE_DIR}/src/PMTSignal.cxx"
                )
 target_link_libraries(joinPeds PUBLIC ${ROOT_LIBRARIES} ${OpenCV_LIBS} s3 curl rootana cygnolib z opencv_imgcodecs opencv_core tbb)
 
