@@ -17,7 +17,7 @@
 'GEM1_HV'               : 440.,      # HV of GEM1
 'GEM2_HV'               : 440.,      # HV of GEM2
 'GEM3_HV'               : 440.,      # HV of GEM3
-'GEM_gain_factor'       : 0.03,
+
 'x_dim'			: 346,       # first dimension of the detector
 'y_dim'			: 346,       # second dimension of the detector
 
@@ -42,7 +42,6 @@
 'exposure_time'         : 300,       # exposure time in milliseconds
 
 # Saturation parameters from https://github.com/CYGNUS-RD/digitizationpp/tree/49b7014
-'saturation'            : True,      # if 'True' saturation effect is applied on GEM3    
 'xy_vox_scale'          : 1, # pixel size / xy voxel dimension (MUST be integer AND >= 1)
 'z_vox_dim'             : 0.1,       # z voxel size in [mm]
 'A'                     : 1,        # free parameter (total scale factor MC/data)
