@@ -17,7 +17,7 @@
 'GEM1_HV'               : 440.,      # HV of GEM1
 'GEM2_HV'               : 440.,      # HV of GEM2
 'GEM3_HV'               : 440.,      # HV of GEM3
-'GEM_gain_factor'       : 0.03,
+
 'x_dim'			: 346,       # first dimension of the detector
 'y_dim'			: 346,       # second dimension of the detector
 
@@ -41,20 +41,21 @@
 'exposure_time_effect'  : False,      # if True simulates the effect of tracks cut by the sensor being not fully exposed
 'exposure_time'         : 300,       # exposure time in milliseconds
 
-# Saturation parameters
+# Saturation parameters from https://github.com/CYGNUS-RD/digitizationpp/tree/49b7014
 'xy_vox_scale'          : 1, # pixel size / xy voxel dimension (MUST be integer AND >= 1)
 'z_vox_dim'             : 0.1,       # z voxel size in [mm]
 'A'                     : 1,        # free parameter (total scale factor MC/data)
 'beta'                  : 0.8e-5,    # saturation parameter
-'z_vox_dim'             : 0.1,       # z voxel size in [mm]
 'zcloud'		: 20,        # z dimension of the electron cloud in [mm]
+'c_G'                   : 0.03,      # normalization factor for the Gain saturation model
+'alpha_G'               : 0.0209,    # exponential factor or the Gain saturation model
 
 # Background
-'bckg'                  : False,      # if 'True' background is added
+'bckg'                  : True,      # if 'True' background is added
 'tag'			: 'Data',    # Set 'Data' to download a real pedestal run 
-'noiserun'              : '97002;97009',      # pedestal runs to add as background separated by ';'
+'noiserun'              : '94900;94564;94130',      # pedestal runs to add as background separated by ';'
 'ped_cloud_dir'         : 'LNGS',    # directory inside the cloud bucket where the pedestal run is located
-'bckg_path'		: '../tmp/', # set path to pedestal run, or leave it black if you want to download it
+'bckg_path'		: './tmp/', # set path to pedestal run, or leave it black if you want to download it
 'bckg_name'     	: 'mypeds.root', # set name of the .root file containing the pedestals
 'random_ped'            : -1, # if -1 then the pedestal is randomly extracted from the 'bckg_name' file, else put here which fixed event of the 'bckg_name' file you want to use
 'start_event'		: 0,         # index of the first event to digitize

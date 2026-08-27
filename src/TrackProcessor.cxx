@@ -830,7 +830,6 @@ bool TrackProcessor::ph_smearing2D( const vector<double>& x_hits_tr,            
         return nel_i * optA * GEM3_gain * omega * optphotons_per_el * optcounts_per_photon;
     });
 
-
     vector<double> sigma_xy = compute_sigma(config.getDouble("diff_const_sigma0T"), config.getDouble("diff_coeff_T"), z_hits_tr);
 
     S2D_x = smear(x_hits_tr, sigma_xy, nph);

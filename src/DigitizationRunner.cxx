@@ -100,11 +100,12 @@ void DigitizationRunner::runPedsOnly() {
 }
 
 void DigitizationRunner::initializeGlobals() {
-    double gain_factor = config.getDouble("GEM_gain_factor");
-    
-    GEM1_gain = gain_factor * exp(0.0209 * config.getDouble("GEM1_HV"));
-    GEM2_gain = gain_factor * exp(0.0209 * config.getDouble("GEM2_HV"));
-    GEM3_gain = gain_factor * exp(0.0209 * config.getDouble("GEM3_HV"));
+    double c_G = config.getDouble("c_G");
+    double alpha_G = config.getDouble("alpha_G");
+
+    GEM1_gain = c_G * exp(alpha_G * config.getDouble("GEM1_HV"));
+    GEM2_gain = c_G * exp(alpha_G * config.getDouble("GEM2_HV"));
+    GEM3_gain = c_G * exp(alpha_G * config.getDouble("GEM3_HV"));
 
     extraction_eff_GEM1 = 0.87319885 * exp(-0.002 * config.getDouble("GEM1_HV"));
     extraction_eff_GEM2 = 0.87319885 * exp(-0.002 * config.getDouble("GEM2_HV"));
@@ -517,7 +518,7 @@ void DigitizationRunner::processRootFiles() {
         if(! filesystem::exists(fnameoutfolder) && !config.getBool("queue")){
             int ret = system(("mkdir -p " + fnameoutfolder).c_str() );
             if(ret!=0) {
-                cerr << "In DigitizationRunner::processRootFiles: Failed to create oudir: " << fnameoutfolder << endl;
+                cerr << "In DigitizationRunner::processRootFiles: Failed to create outdir: " << fnameoutfolder << endl;
                 exit(EXIT_FAILURE);
             }
         }
